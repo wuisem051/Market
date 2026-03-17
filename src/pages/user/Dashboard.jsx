@@ -1,18 +1,44 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Wrench, MessageSquare, Settings, LogOut, Plus } from 'lucide-react';
+import { Package, Wrench, MessageSquare, Settings, LogOut, Plus, MapPin, Tag } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { db } from '../../firebase/config';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 
 const Dashboard = () => {
     const [activeTab, setActiveTab] = useState('marketplace');
+    const [listings, setListings] = useState([]);
+    const [loadingListings, setLoadingListings] = useState(false);
     const { currentUser, logout } = useAuth();
     const navigate = useNavigate();
 
     useEffect(() => {
-        // Proteger la ruta, si no hay user, se manda al login
         if (!currentUser) {
             navigate('/login');
+            return;
         }
+
+        const fetchUserListings = async () => {
+            setLoadingListings(true);
+            try {
+                const q = query(
+                    collection(db, 'listings'),
+                    where('sellerId', '==', currentUser.uid)
+                );
+                const querySnapshot = await getDocs(q);
+                const fetchedListings = querySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                setListings(fetchedListings);
+            } catch (error) {
+                console.error("Error fetching listings:", error);
+            } finally {
+                setLoadingListings(false);
+            }
+        };
+
+        fetchUserListings();
     }, [currentUser, navigate]);
 
     const handleLogout = async () => {
@@ -104,18 +130,81 @@ const Dashboard = () => {
                         )}
                     </div>
 
-                    {/* VISTA RÁPIDA DE ESPACIO VACÍO */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-12 text-center flex flex-col items-center justify-center">
-                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                            {activeTab === 'marketplace' && <Package className="w-8 h-8 text-slate-300" />}
-                            {activeTab === 'servicios' && <Wrench className="w-8 h-8 text-slate-300" />}
-                            {activeTab === 'mensajes' && <MessageSquare className="w-8 h-8 text-slate-300" />}
-                            {activeTab === 'config' && <Settings className="w-8 h-8 text-slate-300" />}
-                        </div>
-                        <h3 className="text-lg font-medium text-slate-900 mb-2">Aún no hay datos aquí</h3>
-                        <p className="text-slate-500 text-sm max-w-sm">
-                            Cuando comiences a utilizar la plataforma, tus publicaciones y mensajes aparecerán en esta sección.
-                        </p>
+                    {/* FILTRADO DE CONTENIDO */}
+                    <div className="space-y-4">
+                        {loadingListings ? (
+                            <div className="text-center py-10 text-slate-500">Cargando tus anuncios...</div>
+                        ) : (
+                            listings.filter(item => {
+                                if (activeTab === 'marketplace') return item.type === 'product';
+                                if (activeTab === 'servicios') return item.type === 'service';
+                                return false;
+                            }).length > 0 ? (
+                                <div className="grid grid-cols-1 gap-4">
+                                    {listings
+                                        .filter(item => {
+                                            if (activeTab === 'marketplace') return item.type === 'product';
+                                            if (activeTab === 'servicios') return item.type === 'service';
+                                            return false;
+                                        })
+                                        .map(item => (
+                                            <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-4 hover:border-teal-200 transition-colors group">
+                                                <div className="w-20 h-20 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
+                                                    {item.images?.[0] ? (
+                                                        <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                                            <Package className="w-8 h-8" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className="font-semibold text-slate-900 truncate">{item.title}</h4>
+                                                    <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
+                                                        <span className="flex items-center gap-1 font-medium text-teal-600">
+                                                            {item.currency} {item.price}
+                                                        </span>
+                                                        <span className="flex items-center gap-1">
+                                                            <MapPin className="w-3.5 h-3.5" /> {item.location?.city}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                    <Link
+                                                        to={`/producto/${item.id}`}
+                                                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors text-center"
+                                                    >
+                                                        Ver Anuncio
+                                                    </Link>
+                                                    <button className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors">
+                                                        Eliminar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-xl border border-slate-200 p-12 text-center flex flex-col items-center justify-center">
+                                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                                        {activeTab === 'marketplace' && <Package className="w-8 h-8 text-slate-300" />}
+                                        {activeTab === 'servicios' && <Wrench className="w-8 h-8 text-slate-300" />}
+                                        {activeTab === 'mensajes' && <MessageSquare className="w-8 h-8 text-slate-300" />}
+                                        {activeTab === 'config' && <Settings className="w-8 h-8 text-slate-300" />}
+                                    </div>
+                                    <h3 className="text-lg font-medium text-slate-900 mb-2">Aún no hay anuncios {activeTab === 'marketplace' ? 'de productos' : 'de servicios'}</h3>
+                                    <p className="text-slate-500 text-sm max-w-sm">
+                                        Cuando publiques algo nuevo, aparecerá listado aquí para que puedas gestionarlo.
+                                    </p>
+                                    <button
+                                        onClick={() => navigate('/crear-anuncio')}
+                                        className="mt-6 flex items-center gap-2 text-teal-600 font-medium hover:underline"
+                                    >
+                                        <Plus className="w-4 h-4" /> Publicar ahora
+                                    </button>
+                                </div>
+                            )
+                        )}
                     </div>
                 </div>
             </main>
