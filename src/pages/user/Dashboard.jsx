@@ -3,7 +3,7 @@ import { Package, Wrench, MessageSquare, Settings, LogOut, Plus, MapPin, Tag } f
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
 
 const Dashboard = () => {
     const [activeTab, setActiveTab] = useState('marketplace');
@@ -11,6 +11,19 @@ const Dashboard = () => {
     const [loadingListings, setLoadingListings] = useState(false);
     const { currentUser, logout } = useAuth();
     const navigate = useNavigate();
+
+    const handleDelete = async (id) => {
+        if (window.confirm('¿Estás seguro de que quieres eliminar esta publicación?')) {
+            try {
+                await deleteDoc(doc(db, 'listings', id));
+                // Actualizar estado local eliminando el item borrado
+                setListings(prev => prev.filter(item => item.id !== id));
+            } catch (error) {
+                console.error("Error al eliminar:", error);
+                alert("Hubo un error al eliminar la publicación");
+            }
+        }
+    };
 
     useEffect(() => {
         if (!currentUser) {
@@ -176,7 +189,10 @@ const Dashboard = () => {
                                                     >
                                                         Ver Anuncio
                                                     </Link>
-                                                    <button className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors">
+                                                    <button
+                                                        onClick={() => handleDelete(item.id)}
+                                                        className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
+                                                    >
                                                         Eliminar
                                                     </button>
                                                 </div>
