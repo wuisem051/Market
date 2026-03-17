@@ -1,0 +1,41 @@
+import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Home from './pages/Home';
+import Login from './pages/auth/Login';
+import Dashboard from './pages/user/Dashboard';
+import CreateListing from './pages/user/CreateListing';
+import { AuthProvider } from './context/AuthContext';
+
+import Marketplace from './pages/Marketplace';
+import ProductDetail from './pages/ProductDetail';
+import Services from './pages/Services';
+import AdminDashboard from './pages/admin/AdminDashboard';
+
+function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
+          <Navbar />
+          <main className="flex-1 flex flex-col">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/productos" element={<Marketplace />} />
+              <Route path="/servicios" element={<Services />} />
+              <Route path="/producto/:id" element={<ProductDetail />} />
+              <Route path="/crear-anuncio" element={<CreateListing />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              {/* Opcional: Ruta para cuando la página no existe */}
+              <Route path="*" element={<div className="p-8 text-center text-slate-500">Página no encontrada</div>} />
+            </Routes>
+          </main>
+        </div>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
+
+export default App;

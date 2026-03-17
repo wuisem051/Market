@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función auxiliar: verifica que el usuario haya iniciado sesión
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Colección de Usuarios: Todos pueden leer, pero solo el dueño puede modificar su perfil
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update, delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Colección de Listados (Marketplace): REGLAS ABIERTAS PARA TESTEO LOCAL
+    match /listings/{listingId} {
+      allow read: if true;
+      // Permitimos crear a todos temporalmente para verificar la conexión
+      allow create: if true;
+      // Editar/borrar requiere que el sellerId coincida (seguridad mínima activa)
+      allow update, delete: if isSignedIn() && resource.data.sellerId == request.auth.uid;
+    }
+    
+    // Resto de colecciones por defecto bloqueadas
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
