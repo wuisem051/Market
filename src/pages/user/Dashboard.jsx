@@ -221,8 +221,8 @@ const Dashboard = () => {
             </aside>
 
             {/* CONTENIDO PRINCIPAL */}
-            <main className="flex-1 p-6 sm:p-8 lg:p-12 overflow-y-auto">
-                <div className="max-w-4xl mx-auto">
+            <main className="flex-1 p-6 md:p-10 overflow-y-auto w-full">
+                <div className="w-full">
                     <div className="flex flex-col sm:flex-row items-baseline justify-between mb-10 pb-6 border-b border-slate-200 gap-4">
                         <div>
                             <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">
@@ -249,7 +249,7 @@ const Dashboard = () => {
                     </div>
 
                     {activeTab === 'config' ? (
-                        <div className="bg-white rounded-[2rem] border border-slate-100 p-8 md:p-12 shadow-2xl shadow-slate-200/50">
+                        <div className="max-w-4xl bg-white rounded-[2rem] border border-slate-100 p-8 md:p-12 shadow-2xl shadow-slate-200/50">
                             <form onSubmit={handleUpdateProfile} className="space-y-8">
                                 {/* FOTO DE PERFIL CON POCKETBASE */}
                                 <div className="flex flex-col items-center gap-4 border-b border-slate-100 pb-8">
@@ -352,7 +352,7 @@ const Dashboard = () => {
                                     if (activeTab === 'servicios') return item.type === 'service';
                                     return false;
                                 }).length > 0 ? (
-                                    <div className="grid grid-cols-1 gap-6">
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 pb-20">
                                         {listings
                                             .filter(item => {
                                                 if (activeTab === 'marketplace') return item.type === 'product';

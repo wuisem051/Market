@@ -25,7 +25,7 @@ const MessageCenter = ({ initialProductId, initialSellerId }) => {
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
+    }, [messages, activeConversation]);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -217,7 +217,7 @@ const MessageCenter = ({ initialProductId, initialSellerId }) => {
     };
 
     return (
-        <div className="flex h-[600px] bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-2xl shadow-slate-200/50">
+        <div className="flex h-[calc(100vh-280px)] min-h-[500px] bg-white border-t border-slate-100 overflow-hidden">
             {/* Sidebar */}
             <div className={`${activeConversation ? 'hidden md:flex' : 'flex'} w-full md:w-80 flex-col border-r border-slate-50 bg-slate-50/30`}>
                 <div className="p-6 border-b border-slate-100 bg-white">
