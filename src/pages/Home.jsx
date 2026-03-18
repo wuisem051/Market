@@ -17,25 +17,18 @@ const Home = () => {
         const fetchHomeData = async () => {
             setLoading(true);
             try {
-                // 1. Fetch 5 Recent Products
-                const pq = query(
+                // Fetch recent listings regardless of type to avoid index errors
+                const q = query(
                     collection(db, 'listings'),
-                    where('type', '==', 'product'),
                     orderBy('createdAt', 'desc'),
-                    limit(5)
+                    limit(20)
                 );
-                const pSnapshot = await getDocs(pq);
-                setRecentProducts(pSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                const snapshot = await getDocs(q);
+                const allRecent = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                // 2. Fetch 3 Recent Services
-                const sq = query(
-                    collection(db, 'listings'),
-                    where('type', '==', 'service'),
-                    orderBy('createdAt', 'desc'),
-                    limit(3)
-                );
-                const sSnapshot = await getDocs(sq);
-                setRecentServices(sSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                // Filter in memory
+                setRecentProducts(allRecent.filter(item => item.type === 'product').slice(0, 5));
+                setRecentServices(allRecent.filter(item => item.type === 'service').slice(0, 3));
             } catch (error) {
                 console.error("Error al cargar datos del home:", error);
             } finally {
