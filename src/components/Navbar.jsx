@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Menu, Package, User, MessageSquare, Bell } from 'lucide-react';
+import { Search, Menu, Package, User, MessageSquare, Bell, Settings } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
