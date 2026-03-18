@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Wrench, MessageSquare, Settings, LogOut, Plus, MapPin, Tag, Loader2 } from 'lucide-react';
+import { Package, Wrench, MessageSquare, Settings, LogOut, Plus, MapPin, Tag, Loader2, UploadCloud, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
+import API_CONFIG, { getPocketBaseFileUrl } from '../../config/api';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc } from 'firebase/firestore';
 
 const Dashboard = () => {
@@ -17,6 +18,9 @@ const Dashboard = () => {
         photoURL: ''
     });
     const [savingProfile, setSavingProfile] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [filePreview, setFilePreview] = useState(null);
+
     const { currentUser, logout, updateUserProfile } = useAuth();
     const navigate = useNavigate();
 
@@ -68,15 +72,56 @@ const Dashboard = () => {
         fetchAllData();
     }, [currentUser, navigate]);
 
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setSelectedFile(file);
+            const previewUrl = URL.createObjectURL(file);
+            setFilePreview(previewUrl);
+        }
+    };
+
+    const handleUploadToPocketBase = async (file) => {
+        const formData = new FormData();
+        formData.append(API_CONFIG.FILE_FIELD_NAME, file);
+
+        const response = await fetch(`${API_CONFIG.POCKETBASE_URL}/api/collections/${API_CONFIG.COLLECTION_NAME}/records`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Error al subir la imagen');
+        }
+
+        const data = await response.json();
+        return getPocketBaseFileUrl(data);
+    };
+
     const handleUpdateProfile = async (e) => {
         e.preventDefault();
         setSavingProfile(true);
         try {
-            await updateUserProfile(profileData);
+            let finalPhotoURL = profileData.photoURL;
+
+            if (selectedFile) {
+                finalPhotoURL = await handleUploadToPocketBase(selectedFile);
+            }
+
+            await updateUserProfile({
+                ...profileData,
+                photoURL: finalPhotoURL
+            });
+
+            setProfileData(prev => ({ ...prev, photoURL: finalPhotoURL }));
+            setSelectedFile(null);
+            setFilePreview(null);
+
             alert("Perfil actualizado correctamente");
         } catch (error) {
             console.error("Error updating profile:", error);
-            alert("Error al actualizar perfil");
+            alert("Error al actualizar perfil: " + error.message);
         } finally {
             setSavingProfile(false);
         }
@@ -190,6 +235,33 @@ const Dashboard = () => {
                     {activeTab === 'config' ? (
                         <div className="bg-white rounded-[2rem] border border-slate-100 p-8 md:p-12 shadow-2xl shadow-slate-200/50">
                             <form onSubmit={handleUpdateProfile} className="space-y-8">
+                                {/* FOTO DE PERFIL CON POCKETBASE */}
+                                <div className="flex flex-col items-center gap-4 border-b border-slate-100 pb-8">
+                                    <div className="relative group">
+                                        <div className="w-32 h-32 rounded-[2.5rem] bg-slate-50 border-4 border-white shadow-xl overflow-hidden">
+                                            {filePreview ? (
+                                                <img src={filePreview} alt="" className="w-full h-full object-cover" />
+                                            ) : profileData.photoURL ? (
+                                                <img src={profileData.photoURL} alt="" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-slate-200 uppercase font-black text-4xl">
+                                                    {(profileData.displayName || 'U').charAt(0)}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileChange}
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        />
+                                        <div className="absolute -bottom-2 -right-2 bg-teal-500 text-white p-2 rounded-xl shadow-lg group-hover:scale-110 transition-transform">
+                                            <UploadCloud className="w-4 h-4" />
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pulsa para cambiar foto</p>
+                                </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Nombre Público</label>
@@ -222,7 +294,7 @@ const Dashboard = () => {
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">URL de Foto de Perfil</label>
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">URL de Foto (Opcional)</label>
                                         <input
                                             type="text"
                                             value={profileData.photoURL}
@@ -237,9 +309,14 @@ const Dashboard = () => {
                                     <button
                                         type="submit"
                                         disabled={savingProfile}
-                                        className="w-full md:w-auto bg-slate-900 hover:bg-black text-white px-12 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl shadow-slate-900/20 active:scale-95 disabled:opacity-50"
+                                        className="w-full md:w-auto bg-slate-900 hover:bg-black text-white px-12 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl shadow-slate-900/20 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
-                                        {savingProfile ? 'Guardando...' : 'Guardar Cambios'}
+                                        {savingProfile ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Actualizando...
+                                            </>
+                                        ) : 'Guardar Cambios'}
                                     </button>
                                 </div>
                             </form>
