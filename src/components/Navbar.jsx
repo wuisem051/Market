@@ -85,9 +85,14 @@ const Navbar = () => {
                                     )}
                                 </Link>
 
-                                <Link to="/mensajes" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-teal-600 transition-colors flex items-center gap-2">
+                                <Link to="/dashboard?tab=messages" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-teal-600 transition-colors flex items-center gap-2">
                                     <MessageSquare className="w-4 h-4" />
                                     <span>Chats</span>
+                                </Link>
+
+                                <Link to="/dashboard" className="hidden lg:flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl shadow-slate-900/10 hover:scale-105 active:scale-95">
+                                    <Settings className="w-4 h-4 text-teal-400" />
+                                    <span>Administrar ahora</span>
                                 </Link>
 
                                 <Link to="/dashboard" className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-900 hover:text-white transition-all overflow-hidden border-2 border-white shadow-sm">

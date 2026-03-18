@@ -1,13 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Wrench, MessageSquare, Settings, LogOut, Plus, MapPin, Tag, Loader2, UploadCloud, X } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Package, Wrench, MessageSquare, Settings, LogOut, Plus, MapPin, Tag, Loader2, UploadCloud, X, LayoutDashboard } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
 import API_CONFIG, { getPocketBaseFileUrl } from '../../config/api';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc } from 'firebase/firestore';
+import MessageCenter from '../../components/user/MessageCenter';
 
 const Dashboard = () => {
-    const [activeTab, setActiveTab] = useState('marketplace');
+    const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const initialTab = searchParams.get('tab') || 'marketplace';
+    const [activeTab, setActiveTab] = useState(initialTab);
+
+    // Sync tab with URL
+    useEffect(() => {
+        const params = new URLSearchParams(searchParams);
+        params.set('tab', activeTab);
+        // Only update if different
+        if (searchParams.get('tab') !== activeTab) {
+            navigate(`/dashboard?${params.toString()}`, { replace: true });
+        }
+    }, [activeTab]);
     const [listings, setListings] = useState([]);
     const [loadingListings, setLoadingListings] = useState(false);
 
@@ -22,7 +36,6 @@ const Dashboard = () => {
     const [filePreview, setFilePreview] = useState(null);
 
     const { currentUser, logout, updateUserProfile } = useAuth();
-    const navigate = useNavigate();
 
     useEffect(() => {
         if (!currentUser) {
@@ -184,8 +197,8 @@ const Dashboard = () => {
                         <Wrench className="w-4 h-4" /> Mis Servicios
                     </button>
                     <button
-                        onClick={() => navigate('/mensajes')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-all`}
+                        onClick={() => setActiveTab('messages')}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'messages' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
                         <MessageSquare className="w-4 h-4" /> Centro de Mensajes
                     </button>
@@ -215,10 +228,13 @@ const Dashboard = () => {
                             <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">
                                 {activeTab === 'marketplace' && 'Mis Anuncios'}
                                 {activeTab === 'servicios' && 'Mis Servicios'}
+                                {activeTab === 'messages' && 'Mensajes & Consultas'}
                                 {activeTab === 'config' && 'Configuración de Cuenta'}
                             </h1>
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                {activeTab === 'config' ? 'Gestiona tu perfil público y datos de contacto.' : 'Gestiona tus publicaciones en el marketplace.'}
+                                {activeTab === 'config' ? 'Gestiona tu perfil público y datos de contacto.' :
+                                    activeTab === 'messages' ? 'Habla con vendedores y compradores.' :
+                                        'Gestiona tus publicaciones en el marketplace.'}
                             </p>
                         </div>
 
@@ -321,6 +337,11 @@ const Dashboard = () => {
                                 </div>
                             </form>
                         </div>
+                    ) : activeTab === 'messages' ? (
+                        <MessageCenter
+                            initialProductId={searchParams.get('pid')}
+                            initialSellerId={searchParams.get('sid')}
+                        />
                     ) : (
                         <div className="space-y-4">
                             {loadingListings ? (
@@ -339,7 +360,7 @@ const Dashboard = () => {
                                                 return false;
                                             })
                                             .map(item => (
-                                                <div key={item.id} className="bg-white p-5 rounded-[2rem] border border-slate-100 flex items-center gap-6 hover:shadow-2xl hover:shadow-slate-200/50 transition-all group">
+                                                <div key={item.id} className="bg-white p-5 rounded-[2rem] border border-slate-100 flex items-center gap-6 hover:shadow-2xl hover:shadow-slate-200/50 transition-all group" title="Anuncio">
                                                     <div className="w-24 h-24 bg-slate-100 rounded-2xl overflow-hidden flex-shrink-0 shadow-sm">
                                                         {item.images?.[0] ? (
                                                             <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
@@ -371,7 +392,7 @@ const Dashboard = () => {
                                                             to={`/editar-anuncio/${item.id}`}
                                                             className="px-6 py-2 bg-teal-50 hover:bg-teal-500 hover:text-white text-teal-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center border border-teal-100"
                                                         >
-                                                            Editar
+                                                            Administrar
                                                         </Link>
                                                         <button
                                                             onClick={() => handleDelete(item.id)}

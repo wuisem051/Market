@@ -69,8 +69,8 @@ const ProductDetail = () => {
             return;
         }
 
-        // Navegar a la página de mensajes con el ID del producto y el vendedor
-        navigate(`/mensajes/${id}/${product.sellerId}`);
+        // Navegar al dashboard en la pestaña de mensajes con el ID del producto y el vendedor
+        navigate(`/dashboard?tab=messages&pid=${id}&sid=${product.sellerId}`);
     };
 
     return (
