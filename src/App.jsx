@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Login from './pages/auth/Login';
 import Dashboard from './pages/user/Dashboard';
 import CreateListing from './pages/user/CreateListing';
+import EditListing from './pages/user/EditListing';
 import Messages from './pages/user/Messages';
 import { AuthProvider } from './context/AuthContext';
 
@@ -30,6 +31,7 @@ function App() {
               <Route path="/mensajes" element={<Messages />} />
               <Route path="/mensajes/:productId/:sellerId" element={<Messages />} />
               <Route path="/crear-anuncio" element={<CreateListing />} />
+              <Route path="/editar-anuncio/:id" element={<EditListing />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               {/* Opcional: Ruta para cuando la página no existe */}
               <Route path="*" element={<div className="p-8 text-center text-slate-500">Página no encontrada</div>} />

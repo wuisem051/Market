@@ -367,6 +367,12 @@ const Dashboard = () => {
                                                         >
                                                             Ver
                                                         </Link>
+                                                        <Link
+                                                            to={`/editar-anuncio/${item.id}`}
+                                                            className="px-6 py-2 bg-teal-50 hover:bg-teal-500 hover:text-white text-teal-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center border border-teal-100"
+                                                        >
+                                                            Editar
+                                                        </Link>
                                                         <button
                                                             onClick={() => handleDelete(item.id)}
                                                             className="px-6 py-2 text-red-500 hover:bg-red-50 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
