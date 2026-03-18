@@ -1,12 +1,50 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Search, MapPin, Package, Wrench,
-    Smartphone, MonitorPlay, Briefcase, ChevronRight
+    Smartphone, MonitorPlay, Briefcase, ChevronRight, Loader2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AdBanner from '../components/AdBanner';
+import { db } from '../firebase/config';
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 
 const Home = () => {
+    const [recentProducts, setRecentProducts] = useState([]);
+    const [recentServices, setRecentServices] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchHomeData = async () => {
+            setLoading(true);
+            try {
+                // 1. Fetch 5 Recent Products
+                const pq = query(
+                    collection(db, 'listings'),
+                    where('type', '==', 'product'),
+                    orderBy('createdAt', 'desc'),
+                    limit(5)
+                );
+                const pSnapshot = await getDocs(pq);
+                setRecentProducts(pSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+                // 2. Fetch 3 Recent Services
+                const sq = query(
+                    collection(db, 'listings'),
+                    where('type', '==', 'service'),
+                    orderBy('createdAt', 'desc'),
+                    limit(3)
+                );
+                const sSnapshot = await getDocs(sq);
+                setRecentServices(sSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            } catch (error) {
+                console.error("Error al cargar datos del home:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchHomeData();
+    }, []);
     return (
         <div className="flex flex-col min-h-screen">
             {/* HERO BANNER - ADS #1 */}
@@ -94,22 +132,32 @@ const Home = () => {
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-                    {[1, 2, 3, 4, 5].map((item) => (
-                        <Link to={`/producto/${item}`} key={item} className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow group flex flex-col cursor-pointer">
-                            <div className="aspect-square bg-slate-100 relative group-hover:brightness-95 transition-all">
-                                <div className="absolute inset-0 flex items-center justify-center opacity-30">
-                                    <Package className="w-10 h-10 text-slate-400" />
+                    {loading ? (
+                        [1, 2, 3, 4, 5].map((i) => (
+                            <div key={i} className="bg-white rounded-xl border border-slate-200 aspect-[3/4] animate-pulse" />
+                        ))
+                    ) : (
+                        recentProducts.map((item) => (
+                            <Link to={`/producto/${item.id}`} key={item.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow group flex flex-col cursor-pointer">
+                                <div className="aspect-square bg-slate-100 relative group-hover:brightness-95 transition-all">
+                                    {item.images?.[0] ? (
+                                        <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="absolute inset-0 flex items-center justify-center opacity-30">
+                                            <Package className="w-10 h-10 text-slate-400" />
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                            <div className="p-4 flex-1 flex flex-col">
-                                <h3 className="font-medium text-slate-900 line-clamp-2 text-sm">Laptop HP Pavilion 15 Core i5 8GB RAM 256GB SSD</h3>
-                                <p className="text-lg font-bold text-teal-600 mt-2 mt-auto">$350</p>
-                                <div className="flex gap-1 items-center mt-2 text-slate-500 text-xs">
-                                    <MapPin className="w-3 h-3" /> Valencia, VE
+                                <div className="p-4 flex-1 flex flex-col">
+                                    <h3 className="font-medium text-slate-900 line-clamp-2 text-sm">{item.title}</h3>
+                                    <p className="text-lg font-bold text-teal-600 mt-2 mt-auto">{item.currency} {item.price}</p>
+                                    <div className="flex gap-1 items-center mt-2 text-slate-500 text-xs">
+                                        <MapPin className="w-3 h-3" /> {item.location?.city || 'Venezuela'}
+                                    </div>
                                 </div>
-                            </div>
-                        </Link>
-                    ))}
+                            </Link>
+                        ))
+                    )}
                 </div>
             </section>
 
@@ -125,38 +173,39 @@ const Home = () => {
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
-                                {[
-                                    { name: 'Carlos Mendoza', job: 'Servicio Técnico de PC y Laptops', rate: '4.9', price: '$15', type: 'Presencial', loc: '0.8km' },
-                                    { name: 'Ana Torres', job: 'Diseño Gráfico & Branding Base', rate: '5.0', price: '$40', type: 'Digital', loc: 'Online' },
-                                    { name: 'José Pérez', job: 'Instalación de Aires Acondicionados', rate: '4.7', price: '$20', type: 'Presencial', loc: '3.2km' },
-                                ].map((srv, i) => (
-                                    <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 flex gap-4 items-center hover:border-teal-200 hover:shadow-sm transition-all cursor-pointer">
-                                        <div className="w-16 h-16 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center overflow-hidden border border-slate-100">
-                                            <span className="text-lg text-slate-500 font-bold">{srv.name.charAt(0)}</span>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                                                    {srv.type}
-                                                </span>
-                                                <span className="text-xs text-slate-400 flex items-center gap-1">
-                                                    <MapPin className="w-3 h-3" /> {srv.loc}
-                                                </span>
+                            <div className="grid grid-cols-1 gap-4">
+                                {loading ? (
+                                    <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 text-teal-500 animate-spin" /></div>
+                                ) : (
+                                    recentServices.map((srv) => (
+                                        <Link to={`/producto/${srv.id}`} key={srv.id} className="bg-white p-4 rounded-xl border border-slate-200 flex gap-4 items-center hover:border-teal-200 hover:shadow-sm transition-all cursor-pointer">
+                                            <div className="w-16 h-16 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center overflow-hidden border border-slate-100">
+                                                {srv.images?.[0] ? (
+                                                    <img src={srv.images[0]} alt={srv.title} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <span className="text-lg text-slate-500 font-bold">{srv.sellerName?.charAt(0)}</span>
+                                                )}
                                             </div>
-                                            <h3 className="font-semibold text-slate-900 truncate">{srv.job}</h3>
-                                            <p className="text-sm text-slate-500 truncate">{srv.name}</p>
-                                        </div>
-                                        <div className="text-right flex-shrink-0">
-                                            <div className="flex items-center justify-end gap-1 text-sm font-medium text-amber-500 mb-1">
-                                                ⭐ {srv.rate}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                                        {srv.category === 'servicios-digitales' ? 'Digital / Remoto' : 'Presencial'}
+                                                    </span>
+                                                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                                                        <MapPin className="w-3 h-3" /> {srv.location?.city}
+                                                    </span>
+                                                </div>
+                                                <h3 className="font-semibold text-slate-900 truncate">{srv.title}</h3>
+                                                <p className="text-sm text-slate-500 truncate">{srv.sellerName}</p>
                                             </div>
-                                            <div className="text-sm text-slate-500">
-                                                Desde <span className="font-bold text-slate-900">{srv.price}</span>
+                                            <div className="text-right flex-shrink-0">
+                                                <div className="text-sm text-slate-500">
+                                                    Desde <span className="font-bold text-slate-900">{srv.currency} {srv.price}</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                ))}
+                                        </Link>
+                                    ))
+                                )}
                             </div>
                         </div>
 
