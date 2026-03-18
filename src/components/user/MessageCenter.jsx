@@ -21,10 +21,12 @@ const MessageCenter = ({ initialProductId, initialSellerId }) => {
     const [showOptions, setShowOptions] = useState(false);
     const [reporting, setReporting] = useState(false);
 
-    const messagesEndRef = useRef(null);
+    const scrollRef = useRef(null);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
     }, [messages, activeConversation]);
 
     useEffect(() => {
@@ -269,7 +271,7 @@ const MessageCenter = ({ initialProductId, initialSellerId }) => {
                                 )}
                             </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/40">
+                        <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/40">
                             {messages.map((msg, idx) => {
                                 const isMe = msg.senderId === currentUser.uid;
                                 return (
@@ -284,7 +286,6 @@ const MessageCenter = ({ initialProductId, initialSellerId }) => {
                                     </div>
                                 );
                             })}
-                            <div ref={messagesEndRef} />
                         </div>
                         <form onSubmit={sendMessage} className="p-4 bg-white border-t border-slate-100 flex gap-4 shrink-0">
                             <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1 bg-slate-50 border-none rounded-2xl px-6 py-4 text-sm font-medium outline-none" />
