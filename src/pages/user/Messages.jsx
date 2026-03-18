@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     collection, query, where, onSnapshot, orderBy,
-    addDoc, serverTimestamp, doc, getDoc, setDoc, updateDoc
+    addDoc, serverTimestamp, doc, getDoc, setDoc, updateDoc, writeBatch, increment
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
@@ -34,9 +34,6 @@ const Messages = () => {
     useEffect(() => {
         if (!currentUser) return;
 
-        console.log("Escuchando conversaciones para usuario:", currentUser.uid);
-
-        // Optimized query without orderBy to avoid index requirements
         const q = query(
             collection(db, 'conversations'),
             where('participants', 'array-contains', currentUser.uid)
@@ -48,7 +45,6 @@ const Messages = () => {
                 ...doc.data()
             }));
 
-            // Sort by updatedAt in memory (descending)
             const sortedConvs = fetchedConvs.sort((a, b) => {
                 const dateA = a.updatedAt?.toDate?.() || new Date(0);
                 const dateB = b.updatedAt?.toDate?.() || new Date(0);
@@ -58,24 +54,22 @@ const Messages = () => {
             setConversations(sortedConvs);
             setLoading(false);
 
-            // If we have productId/sellerId params, try to select it from list
             if (productId && sellerId && !activeConversation) {
                 const convId = `${currentUser.uid}_${sellerId}_${productId}`;
                 const existing = fetchedConvs.find(c => c.productId === productId || c.id === convId);
                 if (existing) {
-                    console.log("Conversación encontrada en snapshot");
                     setActiveConversation(existing);
                 }
             }
         }, (error) => {
-            console.error("Error en Snapshot de conversaciones:", error);
+            console.error("Error Snapshot:", error);
             setLoading(false);
         });
 
         return () => unsubscribe();
     }, [currentUser, productId, sellerId]);
 
-    // Separate effect to handle creation of new conversation from URL params
+    // Create new conversation if needed
     useEffect(() => {
         if (!currentUser || !productId || !sellerId) return;
 
@@ -87,15 +81,12 @@ const Messages = () => {
                 const convSnap = await getDoc(convRef);
 
                 if (convSnap.exists()) {
-                    console.log("La conversación ya existe en Firestore");
                     setActiveConversation({ id: convSnap.id, ...convSnap.data() });
                 } else {
-                    console.log("No existe conversación, llamando a handleNewConversation...");
                     await handleNewConversation();
                 }
             } catch (error) {
-                console.error("Error al verificar chat:", error);
-                alert("Error al verificar chat: " + error.message);
+                console.error("Error check chat:", error);
             } finally {
                 setInitializing(false);
             }
@@ -104,9 +95,9 @@ const Messages = () => {
         checkAndCreateConv();
     }, [currentUser, productId, sellerId]);
 
-    // Fetch messages for active conversation
+    // Fetch messages AND Mark as READ
     useEffect(() => {
-        if (!activeConversation) {
+        if (!activeConversation || !currentUser) {
             setMessages([]);
             return;
         }
@@ -116,20 +107,41 @@ const Messages = () => {
             orderBy('createdAt', 'asc')
         );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
             const msgs = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
             setMessages(msgs);
+
+            // Logic to mark as read
+            const unreadMsgs = snapshot.docs.filter(d =>
+                d.data().read === false &&
+                d.data().senderId !== currentUser.uid
+            );
+
+            if (unreadMsgs.length > 0) {
+                const batch = writeBatch(db);
+                unreadMsgs.forEach(d => {
+                    batch.update(doc(db, 'conversations', activeConversation.id, 'messages', d.id), {
+                        read: true
+                    });
+                });
+
+                // Reset unread count for me in the conversation doc
+                batch.update(doc(db, 'conversations', activeConversation.id), {
+                    [`unreadCount.${currentUser.uid}`]: 0
+                });
+
+                await batch.commit();
+            }
         });
 
         return () => unsubscribe();
-    }, [activeConversation]);
+    }, [activeConversation, currentUser]);
 
     const handleNewConversation = async () => {
         try {
-            // Get product info for the conversation header (with fallback if 404)
             let pTitle = "Producto / Servicio";
             let pImg = "";
             let pPrice = 0;
@@ -147,9 +159,8 @@ const Messages = () => {
                     pCurr = p.currency || "USD";
                     sNames[sellerId] = p.sellerName || "Vendedor";
                 }
-            } catch (err) { console.log("Usando placeholders por error en fetch producto"); }
+            } catch (err) { }
 
-            // Create a unique ID for this buyer-seller-product combo
             const convId = `${currentUser.uid}_${sellerId}_${productId}`;
             const convRef = doc(db, 'conversations', convId);
 
@@ -165,19 +176,19 @@ const Messages = () => {
                 productPrice: pPrice,
                 productCurrency: pCurr,
                 lastMessage: 'Inició una conversación',
+                unreadCount: {
+                    [currentUser.uid]: 0,
+                    [sellerId]: 0
+                },
                 updatedAt: serverTimestamp(),
-                createdAt: serverTimestamp(),
-                isDemo: true // Marcar como demo si aplica (opcional)
+                createdAt: serverTimestamp()
             };
 
-            console.log("Intentando setDoc para nueva conversación...");
             await setDoc(convRef, newConvData);
-            console.log("Conversación creada en Firebase!");
             setActiveConversation({ id: convId, ...newConvData });
 
         } catch (error) {
-            console.error("Error crítico al crear chat:", error);
-            alert("FREBASE ERROR: No tienes permisos o la base de datos rechazó el chat. " + error.message);
+            console.error("Error creating chat:", error);
         }
     };
 
@@ -189,10 +200,14 @@ const Messages = () => {
         setNewMessage('');
 
         try {
+            const otherId = activeConversation.participants.find(id => id !== currentUser.uid);
+
             const msgData = {
                 senderId: currentUser.uid,
+                receiverId: otherId,
                 senderName: currentUser.displayName || 'Usuario',
                 text,
+                read: false,
                 createdAt: serverTimestamp()
             };
 
@@ -201,28 +216,15 @@ const Messages = () => {
             await updateDoc(doc(db, 'conversations', activeConversation.id), {
                 lastMessage: text,
                 lastSenderId: currentUser.uid,
-                updatedAt: serverTimestamp()
+                updatedAt: serverTimestamp(),
+                [`unreadCount.${otherId}`]: increment(1)
             });
         } catch (error) {
             console.error("Error sending message:", error);
-            alert("No se pudo enviar el mensaje: " + error.message);
         }
     };
 
-    if (!currentUser) {
-        return (
-            <div className="flex-1 flex items-center justify-center p-8">
-                <div className="text-center">
-                    <MessageSquare className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-slate-900 mb-2">Inicia sesión</h2>
-                    <p className="text-slate-500 mb-6 font-medium">Debes estar registrado para ver tus mensajes.</p>
-                    <button onClick={() => navigate('/login')} className="bg-teal-500 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest shadow-lg shadow-teal-500/20">
-                        Ir al Login
-                    </button>
-                </div>
-            </div>
-        );
-    }
+    if (!currentUser) return null;
 
     return (
         <div className="flex-1 flex overflow-hidden bg-white max-w-7xl mx-auto w-full border-x border-slate-100 shadow-2xl">
@@ -243,14 +245,10 @@ const Messages = () => {
                 <div className="flex-1 overflow-y-auto">
                     {loading ? (
                         <div className="p-10 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-teal-500" /></div>
-                    ) : conversations.length === 0 ? (
-                        <div className="p-10 text-center opacity-40">
-                            <MessageSquare className="w-12 h-12 mx-auto mb-3" />
-                            <p className="text-xs font-black uppercase tracking-widest">Sin conversaciones</p>
-                        </div>
                     ) : (
                         conversations.map(conv => {
                             const otherParticipantId = conv.participants?.find(id => id !== currentUser.uid);
+                            const unread = conv.unreadCount?.[currentUser.uid] || 0;
                             return (
                                 <button
                                     key={conv.id}
@@ -258,17 +256,22 @@ const Messages = () => {
                                     className={`w-full p-4 flex gap-4 transition-all border-b border-slate-50/50 ${activeConversation?.id === conv.id ? 'bg-white shadow-lg z-10 scale-[1.02] ring-1 ring-slate-100' : 'hover:bg-slate-50'}`}
                                 >
                                     <div className="relative shrink-0">
-                                        <div className="w-14 h-14 rounded-2xl bg-teal-500 flex items-center justify-center text-white font-black text-lg shadow-md">
+                                        <div className="w-14 h-14 rounded-2xl bg-teal-500 flex items-center justify-center text-white font-black text-lg shadow-md overflow-hidden">
                                             {conv.productImage ? (
-                                                <img src={conv.productImage} className="w-full h-full object-cover rounded-2xl" alt="" />
+                                                <img src={conv.productImage} className="w-full h-full object-cover" alt="" />
                                             ) : (
                                                 conv.productTitle?.charAt(0) || '?'
                                             )}
                                         </div>
+                                        {unread > 0 && (
+                                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-teal-500 text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white animate-bounce">
+                                                {unread}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex-1 text-left min-w-0">
                                         <div className="flex justify-between items-baseline mb-1">
-                                            <p className="font-black text-slate-900 text-sm truncate uppercase tracking-tight">
+                                            <p className={`font-black text-slate-900 text-sm truncate uppercase tracking-tight ${unread > 0 ? 'text-teal-600' : ''}`}>
                                                 {conv.productTitle}
                                             </p>
                                             <span className="text-[9px] font-bold text-slate-400 uppercase">
@@ -278,7 +281,7 @@ const Messages = () => {
                                         <p className="text-xs font-bold text-slate-500 truncate mb-1">
                                             {conv.participantNames?.[otherParticipantId] || 'Vendedor'}
                                         </p>
-                                        <p className="text-xs text-slate-400 truncate font-medium">
+                                        <p className={`text-xs truncate font-medium flex items-center gap-1 ${unread > 0 ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
                                             {conv.lastSenderId === currentUser.uid ? 'Tú: ' : ''}{conv.lastMessage}
                                         </p>
                                     </div>
@@ -341,7 +344,9 @@ const Messages = () => {
                                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">
                                                     {msg.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '...'}
                                                 </span>
-                                                {isMe && <CheckCheck className="w-3 h-3 text-teal-500" />}
+                                                {isMe && (
+                                                    <CheckCheck className={`w-3 h-3 ${msg.read ? 'text-teal-500' : 'text-slate-300'}`} />
+                                                )}
                                             </div>
                                         </div>
                                     </div>
