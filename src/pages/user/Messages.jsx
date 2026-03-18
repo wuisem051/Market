@@ -55,9 +55,10 @@ const Messages = () => {
             setConversations(sortedConvs);
             setLoading(false);
 
-            // If we came from a product page, find that specific conversation
+            // If we came from a product page, try to find and auto-select
             if (productId && sellerId) {
-                const existing = sortedConvs.find(c => c.productId === productId);
+                const convId = `${currentUser.uid}_${sellerId}_${productId}`;
+                const existing = fetchedConvs.find(c => c.id === convId || c.productId === productId);
                 if (existing) {
                     setActiveConversation(existing);
                 }
@@ -75,14 +76,18 @@ const Messages = () => {
         if (!currentUser || !productId || !sellerId) return;
 
         const checkAndCreateConv = async () => {
-            const convId = `${currentUser.uid}_${sellerId}_${productId}`;
-            const convRef = doc(db, 'conversations', convId);
-            const convSnap = await getDoc(convRef);
+            try {
+                const convId = `${currentUser.uid}_${sellerId}_${productId}`;
+                const convRef = doc(db, 'conversations', convId);
+                const convSnap = await getDoc(convRef);
 
-            if (convSnap.exists()) {
-                setActiveConversation({ id: convSnap.id, ...convSnap.data() });
-            } else {
-                handleNewConversation();
+                if (convSnap.exists()) {
+                    setActiveConversation({ id: convSnap.id, ...convSnap.data() });
+                } else {
+                    handleNewConversation();
+                }
+            } catch (error) {
+                console.error("Error checking conversation:", error);
             }
         };
 
@@ -124,29 +129,25 @@ const Messages = () => {
             // Create a unique ID for this buyer-seller-product combo
             const convId = `${currentUser.uid}_${sellerId}_${productId}`;
             const convRef = doc(db, 'conversations', convId);
-            const convSnap = await getDoc(convRef);
 
-            if (!convSnap.exists()) {
-                const newConv = {
-                    participants: [currentUser.uid, sellerId],
-                    participantNames: {
-                        [currentUser.uid]: currentUser.displayName || 'Comprador',
-                        [sellerId]: pData.sellerName || 'Vendedor'
-                    },
-                    productId: productId,
-                    productTitle: pData.title,
-                    productImage: pData.images?.[0] || '',
-                    productPrice: pData.price,
-                    productCurrency: pData.currency,
-                    lastMessage: 'Inició una conversación',
-                    updatedAt: serverTimestamp(),
-                    createdAt: serverTimestamp()
-                };
-                await setDoc(convRef, newConv);
-                setActiveConversation({ id: convId, ...newConv });
-            } else {
-                setActiveConversation({ id: convId, ...convSnap.data() });
-            }
+            const newConv = {
+                participants: [currentUser.uid, sellerId],
+                participantNames: {
+                    [currentUser.uid]: currentUser.displayName || 'Comprador',
+                    [sellerId]: pData.sellerName || 'Vendedor'
+                },
+                productId: productId,
+                productTitle: pData.title,
+                productImage: pData.images?.[0] || '',
+                productPrice: pData.price,
+                productCurrency: pData.currency,
+                lastMessage: 'Inició una conversación',
+                updatedAt: serverTimestamp(),
+                createdAt: serverTimestamp()
+            };
+
+            await setDoc(convRef, newConv);
+            setActiveConversation({ id: convId, ...newConv });
         } catch (error) {
             console.error("Error creating conversation:", error);
         }
@@ -217,42 +218,42 @@ const Messages = () => {
                             <p className="text-xs font-black uppercase tracking-widest">Sin conversaciones</p>
                         </div>
                     ) : (
-                        conversations.map(conv => (
-                            <button
-                                key={conv.id}
-                                onClick={() => setActiveConversation(conv)}
-                                className={`w-full p-4 flex gap-4 transition-all border-b border-slate-50/50 ${activeConversation?.id === conv.id ? 'bg-white shadow-lg z-10 scale-[1.02] ring-1 ring-slate-100' : 'hover:bg-slate-50'}`}
-                            >
-                                <div className="relative shrink-0">
-                                    <div className="w-14 h-14 rounded-2xl bg-teal-500 flex items-center justify-center text-white font-black text-lg shadow-md">
-                                        {conv.productImage ? (
-                                            <img src={conv.productImage} className="w-full h-full object-cover rounded-2xl" alt="" />
-                                        ) : (
-                                            conv.productTitle?.charAt(0) || '?'
-                                        )}
+                        conversations.map(conv => {
+                            const otherParticipantId = conv.participants?.find(id => id !== currentUser.uid);
+                            return (
+                                <button
+                                    key={conv.id}
+                                    onClick={() => setActiveConversation(conv)}
+                                    className={`w-full p-4 flex gap-4 transition-all border-b border-slate-50/50 ${activeConversation?.id === conv.id ? 'bg-white shadow-lg z-10 scale-[1.02] ring-1 ring-slate-100' : 'hover:bg-slate-50'}`}
+                                >
+                                    <div className="relative shrink-0">
+                                        <div className="w-14 h-14 rounded-2xl bg-teal-500 flex items-center justify-center text-white font-black text-lg shadow-md">
+                                            {conv.productImage ? (
+                                                <img src={conv.productImage} className="w-full h-full object-cover rounded-2xl" alt="" />
+                                            ) : (
+                                                conv.productTitle?.charAt(0) || '?'
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-lg bg-slate-900 border-2 border-white flex items-center justify-center text-[10px] font-black text-white">
-                                        {conv.participantNames[Object.keys(conv.participantNames).find(id => id !== currentUser.uid)]?.charAt(0)}
-                                    </div>
-                                </div>
-                                <div className="flex-1 text-left min-w-0">
-                                    <div className="flex justify-between items-baseline mb-1">
-                                        <p className="font-black text-slate-900 text-sm truncate uppercase tracking-tight">
-                                            {conv.productTitle}
+                                    <div className="flex-1 text-left min-w-0">
+                                        <div className="flex justify-between items-baseline mb-1">
+                                            <p className="font-black text-slate-900 text-sm truncate uppercase tracking-tight">
+                                                {conv.productTitle}
+                                            </p>
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase">
+                                                {conv.updatedAt?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs font-bold text-slate-500 truncate mb-1">
+                                            {conv.participantNames?.[otherParticipantId] || 'Usuario'}
                                         </p>
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase">
-                                            {conv.updatedAt?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
+                                        <p className="text-xs text-slate-400 truncate font-medium">
+                                            {conv.lastSenderId === currentUser.uid ? 'Tú: ' : ''}{conv.lastMessage}
+                                        </p>
                                     </div>
-                                    <p className="text-xs font-bold text-slate-500 truncate mb-1">
-                                        {conv.participantNames[Object.keys(conv.participantNames).find(id => id !== currentUser.uid)]}
-                                    </p>
-                                    <p className="text-xs text-slate-400 truncate font-medium">
-                                        {conv.lastSenderId === currentUser.uid ? 'Tú: ' : ''}{conv.lastMessage}
-                                    </p>
-                                </div>
-                            </button>
-                        ))
+                                </button>
+                            );
+                        })
                     )}
                 </div>
             </div>
@@ -280,7 +281,7 @@ const Messages = () => {
                                     {activeConversation.productTitle}
                                 </h3>
                                 <p className="text-xs font-bold text-teal-600 uppercase tracking-widest">
-                                    Con: {activeConversation.participantNames[Object.keys(activeConversation.participantNames).find(id => id !== currentUser.uid)]}
+                                    Chat con el vendedor
                                 </p>
                             </div>
 
