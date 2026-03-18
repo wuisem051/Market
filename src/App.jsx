@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Login from './pages/auth/Login';
 import Dashboard from './pages/user/Dashboard';
 import CreateListing from './pages/user/CreateListing';
+import Messages from './pages/user/Messages';
 import { AuthProvider } from './context/AuthContext';
 
 import Marketplace from './pages/Marketplace';
@@ -26,6 +27,8 @@ function App() {
               <Route path="/productos" element={<Marketplace />} />
               <Route path="/servicios" element={<Services />} />
               <Route path="/producto/:id" element={<ProductDetail />} />
+              <Route path="/mensajes" element={<Messages />} />
+              <Route path="/mensajes/:productId/:sellerId" element={<Messages />} />
               <Route path="/crear-anuncio" element={<CreateListing />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               {/* Opcional: Ruta para cuando la página no existe */}

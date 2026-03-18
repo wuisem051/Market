@@ -50,10 +50,7 @@ const Home = () => {
             {/* HERO BANNER - ADS #1 */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 w-full">
                 <AdBanner
-                    title="¡Llega a toda Venezuela!"
-                    description="Promociona tus productos o servicios en la plataforma de mayor crecimiento en el país. Planes desde $5/mes."
-                    image="https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&q=80&w=1200"
-                    link="/crear-anuncio"
+                    zone="home-top"
                     type="horizontal"
                 />
             </div>
@@ -212,10 +209,7 @@ const Home = () => {
                         <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-4">
                             {/* SIDEBAR ADS */}
                             <AdBanner
-                                title="Anuncia Aquí"
-                                description="Potencia tu negocio con nosotros. Banners dinámicos en toda la red."
-                                image="https://images.unsplash.com/photo-1542744094-24638eff58bb?auto=format&fit=crop&q=80&w=800"
-                                link="/contacto"
+                                zone="sidebar"
                                 type="vertical"
                             />
                         </div>
