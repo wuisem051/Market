@@ -33,32 +33,60 @@ const Messages = () => {
     useEffect(() => {
         if (!currentUser) return;
 
+        // Optimized query without orderBy to avoid index requirements
         const q = query(
             collection(db, 'conversations'),
-            where('participants', 'array-contains', currentUser.uid),
-            orderBy('updatedAt', 'desc')
+            where('participants', 'array-contains', currentUser.uid)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const convs = snapshot.docs.map(doc => ({
+            const fetchedConvs = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
-            setConversations(convs);
+
+            // Sort by updatedAt in memory (descending)
+            const sortedConvs = fetchedConvs.sort((a, b) => {
+                const dateA = a.updatedAt?.toDate?.() || new Date(0);
+                const dateB = b.updatedAt?.toDate?.() || new Date(0);
+                return dateB - dateA;
+            });
+
+            setConversations(sortedConvs);
             setLoading(false);
 
-            // If we came from a product page, find or create that specific conversation
-            if (productId && sellerId && !activeConversation) {
-                const existing = convs.find(c => c.productId === productId && (c.participants.includes(sellerId)));
+            // If we came from a product page, find that specific conversation
+            if (productId && sellerId) {
+                const existing = sortedConvs.find(c => c.productId === productId);
                 if (existing) {
                     setActiveConversation(existing);
-                } else {
-                    handleNewConversation();
                 }
             }
+        }, (error) => {
+            console.error("Error in onSnapshot:", error);
+            setLoading(false);
         });
 
         return () => unsubscribe();
+    }, [currentUser, productId, sellerId]);
+
+    // Separate effect to handle creation of new conversation from URL
+    useEffect(() => {
+        if (!currentUser || !productId || !sellerId) return;
+
+        const checkAndCreateConv = async () => {
+            const convId = `${currentUser.uid}_${sellerId}_${productId}`;
+            const convRef = doc(db, 'conversations', convId);
+            const convSnap = await getDoc(convRef);
+
+            if (convSnap.exists()) {
+                setActiveConversation({ id: convSnap.id, ...convSnap.data() });
+            } else {
+                handleNewConversation();
+            }
+        };
+
+        checkAndCreateConv();
     }, [currentUser, productId, sellerId]);
 
     // Fetch messages for active conversation
