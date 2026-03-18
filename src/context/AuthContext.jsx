@@ -9,7 +9,7 @@ import {
     updateProfile
 } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -86,20 +86,56 @@ export const AuthProvider = ({ children }) => {
     const updateUserProfile = async (data) => {
         if (!currentUser) return;
 
-        // Update Firebase Auth Profile
-        if (data.displayName || data.photoURL) {
-            await updateProfile(auth.currentUser, {
-                displayName: data.displayName,
-                photoURL: data.photoURL
-            });
-        }
+        const oldName = currentUser.displayName;
+        const oldPhoto = currentUser.photoURL;
+        const newName = data.displayName || oldName;
+        const newPhoto = data.photoURL || oldPhoto;
 
-        // Update Firestore User Doc
+        // 1. Update Firebase Auth Profile
+        await updateProfile(auth.currentUser, {
+            displayName: newName,
+            photoURL: newPhoto
+        });
+
+        // 2. Update Firestore User Doc
         const userRef = doc(db, 'users', currentUser.uid);
         await setDoc(userRef, {
             ...data,
+            displayName: newName,
+            photoURL: newPhoto,
             updatedAt: new Date().toISOString()
         }, { merge: true });
+
+        // DENORMALIZATION: Update name/photo in listings and conversations
+        if (newName !== oldName || newPhoto !== oldPhoto) {
+            try {
+                const batch = writeBatch(db);
+
+                // 3. Update Listings (donde el usuario es el vendedor)
+                const listingsQuery = query(collection(db, 'listings'), where('sellerId', '==', currentUser.uid));
+                const listingsSnap = await getDocs(listingsQuery);
+                listingsSnap.forEach(d => {
+                    batch.update(d.ref, {
+                        sellerName: newName,
+                        sellerPhoto: newPhoto
+                    });
+                });
+
+                // 4. Update Conversations (donde el usuario es participante)
+                const convsQuery = query(collection(db, 'conversations'), where('participants', 'array-contains', currentUser.uid));
+                const convsSnap = await getDocs(convsQuery);
+                convsSnap.forEach(d => {
+                    batch.update(d.ref, {
+                        [`participantNames.${currentUser.uid}`]: newName
+                    });
+                });
+
+                await batch.commit();
+                console.log("Datos denormalizados actualizados con éxito");
+            } catch (err) {
+                console.error("Error actualizando datos denormalizados:", err);
+            }
+        }
 
         // Force Auth update in context
         setCurrentUser({ ...auth.currentUser });
