@@ -17,18 +17,24 @@ const Home = () => {
         const fetchHomeData = async () => {
             setLoading(true);
             try {
-                // Fetch recent listings regardless of type to avoid index errors
+                // Fetch recent listings without orderBy to be 100% sure it returns data
                 const q = query(
                     collection(db, 'listings'),
-                    orderBy('createdAt', 'desc'),
-                    limit(20)
+                    limit(40)
                 );
                 const snapshot = await getDocs(q);
-                const allRecent = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const allFetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Sort by date in memory (descending)
+                const allRecent = allFetched.sort((a, b) => {
+                    const dateA = a.createdAt?.toDate?.() || new Date(0);
+                    const dateB = b.createdAt?.toDate?.() || new Date(0);
+                    return dateB - dateA;
+                });
 
                 // Filter in memory
                 setRecentProducts(allRecent.filter(item => item.type === 'product').slice(0, 5));
-                setRecentServices(allRecent.filter(item => item.type === 'service').slice(0, 3));
+                setRecentServices(allRecent.filter(item => item.type === 'service').slice(0, 6));
             } catch (error) {
                 console.error("Error al cargar datos del home:", error);
             } finally {
@@ -126,6 +132,11 @@ const Home = () => {
                         [1, 2, 3, 4, 5].map((i) => (
                             <div key={i} className="bg-white rounded-xl border border-slate-200 aspect-[3/4] animate-pulse" />
                         ))
+                    ) : recentProducts.length === 0 ? (
+                        <div className="col-span-full py-10 bg-white border-2 border-dashed border-slate-200 rounded-2xl text-center">
+                            <Package className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-loose">No hay productos recientes aún</p>
+                        </div>
                     ) : (
                         recentProducts.map((item) => (
                             <Link to={`/producto/${item.id}`} key={item.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow group flex flex-col cursor-pointer">
@@ -166,6 +177,11 @@ const Home = () => {
                             <div className="grid grid-cols-1 gap-4">
                                 {loading ? (
                                     <div className="flex justify-center p-10"><Loader2 className="w-8 h-8 text-teal-500 animate-spin" /></div>
+                                ) : recentServices.length === 0 ? (
+                                    <div className="py-10 bg-white border-2 border-dashed border-slate-200 rounded-2xl text-center">
+                                        <Wrench className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-loose">No hay servicios destacados aún</p>
+                                    </div>
                                 ) : (
                                     recentServices.map((srv) => (
                                         <Link to={`/producto/${srv.id}`} key={srv.id} className="bg-white p-4 rounded-xl border border-slate-200 flex gap-4 items-center hover:border-teal-200 hover:shadow-sm transition-all cursor-pointer">
