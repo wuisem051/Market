@@ -8,7 +8,7 @@ import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import {
     Send, User, Search, ArrowLeft, MoreVertical,
-    MessageSquare, Clock, Package, Check, CheckCheck
+    MessageSquare, Clock, Package, Check, CheckCheck, Loader2
 } from 'lucide-react';
 
 const Messages = () => {
@@ -21,6 +21,7 @@ const Messages = () => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
+    const [initializing, setInitializing] = useState(false);
 
     const messagesEndRef = useRef(null);
 
@@ -32,6 +33,8 @@ const Messages = () => {
     // Fetch conversations for the current user
     useEffect(() => {
         if (!currentUser) return;
+
+        console.log("Escuchando conversaciones para usuario:", currentUser.uid);
 
         // Optimized query without orderBy to avoid index requirements
         const q = query(
@@ -55,39 +58,46 @@ const Messages = () => {
             setConversations(sortedConvs);
             setLoading(false);
 
-            // If we came from a product page, try to find and auto-select
-            if (productId && sellerId) {
+            // If we have productId/sellerId params, try to select it from list
+            if (productId && sellerId && !activeConversation) {
                 const convId = `${currentUser.uid}_${sellerId}_${productId}`;
-                const existing = fetchedConvs.find(c => c.id === convId || c.productId === productId);
+                const existing = fetchedConvs.find(c => c.productId === productId || c.id === convId);
                 if (existing) {
+                    console.log("Conversación encontrada en snapshot");
                     setActiveConversation(existing);
                 }
             }
         }, (error) => {
-            console.error("Error in onSnapshot:", error);
+            console.error("Error en Snapshot de conversaciones:", error);
             setLoading(false);
         });
 
         return () => unsubscribe();
     }, [currentUser, productId, sellerId]);
 
-    // Separate effect to handle creation of new conversation from URL
+    // Separate effect to handle creation of new conversation from URL params
     useEffect(() => {
         if (!currentUser || !productId || !sellerId) return;
 
         const checkAndCreateConv = async () => {
+            setInitializing(true);
             try {
                 const convId = `${currentUser.uid}_${sellerId}_${productId}`;
                 const convRef = doc(db, 'conversations', convId);
                 const convSnap = await getDoc(convRef);
 
                 if (convSnap.exists()) {
+                    console.log("La conversación ya existe en Firestore");
                     setActiveConversation({ id: convSnap.id, ...convSnap.data() });
                 } else {
-                    handleNewConversation();
+                    console.log("No existe conversación, llamando a handleNewConversation...");
+                    await handleNewConversation();
                 }
             } catch (error) {
-                console.error("Error checking conversation:", error);
+                console.error("Error al verificar chat:", error);
+                alert("Error al verificar chat: " + error.message);
+            } finally {
+                setInitializing(false);
             }
         };
 
@@ -119,53 +129,55 @@ const Messages = () => {
 
     const handleNewConversation = async () => {
         try {
-            // Get product info for the conversation header
-            let productTitle = "Producto / Servicio";
-            let productImage = "";
-            let productPrice = 0;
-            let productCurrency = "USD";
-            let sellerName = "Vendedor";
+            // Get product info for the conversation header (with fallback if 404)
+            let pTitle = "Producto / Servicio";
+            let pImg = "";
+            let pPrice = 0;
+            let pCurr = "USD";
+            let sNames = { [sellerId]: "Vendedor" };
 
             try {
                 const productRef = doc(db, 'listings', productId);
                 const productSnap = await getDoc(productRef);
                 if (productSnap.exists()) {
-                    const pData = productSnap.data();
-                    productTitle = pData.title || productTitle;
-                    productImage = pData.images?.[0] || "";
-                    productPrice = pData.price || 0;
-                    productCurrency = pData.currency || "USD";
-                    sellerName = pData.sellerName || sellerName;
+                    const p = productSnap.data();
+                    pTitle = p.title || pTitle;
+                    pImg = p.images?.[0] || "";
+                    pPrice = p.price || 0;
+                    pCurr = p.currency || "USD";
+                    sNames[sellerId] = p.sellerName || "Vendedor";
                 }
-            } catch (pErr) {
-                console.warn("Product data fetch failed, using fallbacks", pErr);
-            }
+            } catch (err) { console.log("Usando placeholders por error en fetch producto"); }
 
             // Create a unique ID for this buyer-seller-product combo
             const convId = `${currentUser.uid}_${sellerId}_${productId}`;
             const convRef = doc(db, 'conversations', convId);
 
-            const newConv = {
+            const newConvData = {
                 participants: [currentUser.uid, sellerId],
                 participantNames: {
                     [currentUser.uid]: currentUser.displayName || 'Comprador',
-                    [sellerId]: sellerName
+                    ...sNames
                 },
                 productId: productId,
-                productTitle: productTitle,
-                productImage: productImage,
-                productPrice: productPrice,
-                productCurrency: productCurrency,
+                productTitle: pTitle,
+                productImage: pImg,
+                productPrice: pPrice,
+                productCurrency: pCurr,
                 lastMessage: 'Inició una conversación',
                 updatedAt: serverTimestamp(),
-                createdAt: serverTimestamp()
+                createdAt: serverTimestamp(),
+                isDemo: true // Marcar como demo si aplica (opcional)
             };
 
-            await setDoc(convRef, newConv);
-            setActiveConversation({ id: convId, ...newConv });
+            console.log("Intentando setDoc para nueva conversación...");
+            await setDoc(convRef, newConvData);
+            console.log("Conversación creada en Firebase!");
+            setActiveConversation({ id: convId, ...newConvData });
+
         } catch (error) {
-            console.error("Error creating conversation:", error);
-            alert("No se pudo iniciar el chat: " + error.message);
+            console.error("Error crítico al crear chat:", error);
+            alert("FREBASE ERROR: No tienes permisos o la base de datos rechazó el chat. " + error.message);
         }
     };
 
@@ -193,6 +205,7 @@ const Messages = () => {
             });
         } catch (error) {
             console.error("Error sending message:", error);
+            alert("No se pudo enviar el mensaje: " + error.message);
         }
     };
 
@@ -228,7 +241,9 @@ const Messages = () => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
-                    {conversations.length === 0 && !loading ? (
+                    {loading ? (
+                        <div className="p-10 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-teal-500" /></div>
+                    ) : conversations.length === 0 ? (
                         <div className="p-10 text-center opacity-40">
                             <MessageSquare className="w-12 h-12 mx-auto mb-3" />
                             <p className="text-xs font-black uppercase tracking-widest">Sin conversaciones</p>
@@ -257,11 +272,11 @@ const Messages = () => {
                                                 {conv.productTitle}
                                             </p>
                                             <span className="text-[9px] font-bold text-slate-400 uppercase">
-                                                {conv.updatedAt?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {conv.updatedAt?.toDate?.()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '--:--'}
                                             </span>
                                         </div>
                                         <p className="text-xs font-bold text-slate-500 truncate mb-1">
-                                            {conv.participantNames?.[otherParticipantId] || 'Usuario'}
+                                            {conv.participantNames?.[otherParticipantId] || 'Vendedor'}
                                         </p>
                                         <p className="text-xs text-slate-400 truncate font-medium">
                                             {conv.lastSenderId === currentUser.uid ? 'Tú: ' : ''}{conv.lastMessage}
@@ -297,7 +312,7 @@ const Messages = () => {
                                     {activeConversation.productTitle}
                                 </h3>
                                 <p className="text-xs font-bold text-teal-600 uppercase tracking-widest">
-                                    Chat con el vendedor
+                                    Con: {activeConversation.participantNames?.[Object.keys(activeConversation.participantNames || {}).find(id => id !== currentUser.uid)] || 'Vendedor'}
                                 </p>
                             </div>
 
@@ -310,7 +325,7 @@ const Messages = () => {
                         <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/40 custom-scrollbar">
                             <div className="text-center py-8">
                                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-slate-100 shadow-sm text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                    <Clock className="w-3 h-3" /> Chat iniciado el {activeConversation.createdAt?.toDate().toLocaleDateString()}
+                                    <Clock className="w-3 h-3" /> Chat iniciado el {activeConversation.createdAt?.toDate?.()?.toLocaleDateString() || '...'}
                                 </div>
                             </div>
 
@@ -324,7 +339,7 @@ const Messages = () => {
                                             </div>
                                             <div className="flex items-center gap-2 px-2">
                                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">
-                                                    {msg.createdAt?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    {msg.createdAt?.toDate?.()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '...'}
                                                 </span>
                                                 {isMe && <CheckCheck className="w-3 h-3 text-teal-500" />}
                                             </div>
@@ -358,11 +373,17 @@ const Messages = () => {
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center p-12 text-center opacity-30 select-none">
                         <div className="w-32 h-32 bg-slate-100 rounded-[3rem] flex items-center justify-center mb-8">
-                            <MessageSquare className="w-16 h-16 text-slate-300" />
+                            {productId && initializing ? (
+                                <Loader2 className="w-16 h-16 text-teal-500 animate-spin" />
+                            ) : (
+                                <MessageSquare className="w-16 h-16 text-slate-300" />
+                            )}
                         </div>
-                        <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-2">Selecciona un chat</h2>
+                        <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-2">
+                            {productId && initializing ? 'Cargando Chat...' : 'Selecciona un chat'}
+                        </h2>
                         <p className="max-w-xs font-bold text-slate-500 uppercase text-[10px] tracking-widest leading-loose">
-                            Elige una conversación de la izquierda para ver los detalles y negociar con el vendedor.
+                            {productId && initializing ? 'Estamos preparando tu conversación con el vendedor.' : 'Elige una conversación de la izquierda para ver los detalles y negociar con el vendedor.'}
                         </p>
                     </div>
                 )}
