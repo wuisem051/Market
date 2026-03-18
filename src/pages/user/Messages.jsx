@@ -279,7 +279,7 @@ const Messages = () => {
     if (!currentUser) return null;
 
     return (
-        <div className="flex-1 flex overflow-hidden bg-white max-w-7xl mx-auto w-full border-x border-slate-100 shadow-2xl relative">
+        <div className="flex-1 flex overflow-hidden bg-white w-full relative">
             {/* Sidebar: Conversations List */}
             <div className={`${activeConversation ? 'hidden md:flex' : 'flex'} w-full md:w-[350px] border-r border-slate-100 flex-col bg-slate-50/30`}>
                 <div className="p-6 border-b border-slate-100 bg-white">
