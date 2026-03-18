@@ -70,7 +70,7 @@ const ProductDetail = () => {
         }
 
         // Navegar a la página de mensajes con el ID del producto y el vendedor
-        navigate(`/ mensajes / ${id}/${product.sellerId}`);
+        navigate(`/mensajes/${id}/${product.sellerId}`);
     };
 
     return (
