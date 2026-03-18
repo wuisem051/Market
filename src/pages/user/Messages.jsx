@@ -120,11 +120,26 @@ const Messages = () => {
     const handleNewConversation = async () => {
         try {
             // Get product info for the conversation header
-            const productRef = doc(db, 'listings', productId);
-            const productSnap = await getDoc(productRef);
+            let productTitle = "Producto / Servicio";
+            let productImage = "";
+            let productPrice = 0;
+            let productCurrency = "USD";
+            let sellerName = "Vendedor";
 
-            if (!productSnap.exists()) return;
-            const pData = productSnap.data();
+            try {
+                const productRef = doc(db, 'listings', productId);
+                const productSnap = await getDoc(productRef);
+                if (productSnap.exists()) {
+                    const pData = productSnap.data();
+                    productTitle = pData.title || productTitle;
+                    productImage = pData.images?.[0] || "";
+                    productPrice = pData.price || 0;
+                    productCurrency = pData.currency || "USD";
+                    sellerName = pData.sellerName || sellerName;
+                }
+            } catch (pErr) {
+                console.warn("Product data fetch failed, using fallbacks", pErr);
+            }
 
             // Create a unique ID for this buyer-seller-product combo
             const convId = `${currentUser.uid}_${sellerId}_${productId}`;
@@ -134,13 +149,13 @@ const Messages = () => {
                 participants: [currentUser.uid, sellerId],
                 participantNames: {
                     [currentUser.uid]: currentUser.displayName || 'Comprador',
-                    [sellerId]: pData.sellerName || 'Vendedor'
+                    [sellerId]: sellerName
                 },
                 productId: productId,
-                productTitle: pData.title,
-                productImage: pData.images?.[0] || '',
-                productPrice: pData.price,
-                productCurrency: pData.currency,
+                productTitle: productTitle,
+                productImage: productImage,
+                productPrice: productPrice,
+                productCurrency: productCurrency,
                 lastMessage: 'Inició una conversación',
                 updatedAt: serverTimestamp(),
                 createdAt: serverTimestamp()
@@ -150,6 +165,7 @@ const Messages = () => {
             setActiveConversation({ id: convId, ...newConv });
         } catch (error) {
             console.error("Error creating conversation:", error);
+            alert("No se pudo iniciar el chat: " + error.message);
         }
     };
 
