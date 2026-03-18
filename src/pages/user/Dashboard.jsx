@@ -1,29 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Wrench, MessageSquare, Settings, LogOut, Plus, MapPin, Tag } from 'lucide-react';
+import { Package, Wrench, MessageSquare, Settings, LogOut, Plus, MapPin, Tag, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
-import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc } from 'firebase/firestore';
 
 const Dashboard = () => {
     const [activeTab, setActiveTab] = useState('marketplace');
     const [listings, setListings] = useState([]);
     const [loadingListings, setLoadingListings] = useState(false);
-    const { currentUser, logout } = useAuth();
-    const navigate = useNavigate();
 
-    const handleDelete = async (id) => {
-        if (window.confirm('¿Estás seguro de que quieres eliminar esta publicación?')) {
-            try {
-                await deleteDoc(doc(db, 'listings', id));
-                // Actualizar estado local eliminando el item borrado
-                setListings(prev => prev.filter(item => item.id !== id));
-            } catch (error) {
-                console.error("Error al eliminar:", error);
-                alert("Hubo un error al eliminar la publicación");
-            }
-        }
-    };
+    const [profileData, setProfileData] = useState({
+        displayName: '',
+        phone: '',
+        location: '',
+        photoURL: ''
+    });
+    const [savingProfile, setSavingProfile] = useState(false);
+    const { currentUser, logout, updateUserProfile } = useAuth();
+    const navigate = useNavigate();
 
     useEffect(() => {
         if (!currentUser) {
@@ -31,9 +26,10 @@ const Dashboard = () => {
             return;
         }
 
-        const fetchUserListings = async () => {
+        const fetchAllData = async () => {
             setLoadingListings(true);
             try {
+                // Fetch Listings
                 const q = query(
                     collection(db, 'listings'),
                     where('sellerId', '==', currentUser.uid)
@@ -44,15 +40,59 @@ const Dashboard = () => {
                     ...doc.data()
                 }));
                 setListings(fetchedListings);
+
+                // Fetch Profile details from Firestore
+                const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+                if (userDoc.exists()) {
+                    setProfileData({
+                        displayName: userDoc.data().displayName || currentUser.displayName || '',
+                        phone: userDoc.data().phone || '',
+                        location: userDoc.data().location || '',
+                        photoURL: userDoc.data().photoURL || currentUser.photoURL || ''
+                    });
+                } else {
+                    setProfileData({
+                        displayName: currentUser.displayName || '',
+                        photoURL: currentUser.photoURL || '',
+                        phone: '',
+                        location: ''
+                    });
+                }
             } catch (error) {
-                console.error("Error fetching listings:", error);
+                console.error("Error fetching data:", error);
             } finally {
                 setLoadingListings(false);
             }
         };
 
-        fetchUserListings();
+        fetchAllData();
     }, [currentUser, navigate]);
+
+    const handleUpdateProfile = async (e) => {
+        e.preventDefault();
+        setSavingProfile(true);
+        try {
+            await updateUserProfile(profileData);
+            alert("Perfil actualizado correctamente");
+        } catch (error) {
+            console.error("Error updating profile:", error);
+            alert("Error al actualizar perfil");
+        } finally {
+            setSavingProfile(false);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (window.confirm('¿Estás seguro de que quieres eliminar esta publicación?')) {
+            try {
+                await deleteDoc(doc(db, 'listings', id));
+                setListings(prev => prev.filter(item => item.id !== id));
+            } catch (error) {
+                console.error("Error al eliminar:", error);
+                alert("Hubo un error al eliminar la publicación");
+            }
+        }
+    };
 
     const handleLogout = async () => {
         try {
@@ -63,165 +103,225 @@ const Dashboard = () => {
         }
     };
 
-    if (!currentUser) return null; // Previene un parpadeo de contenido mientras redirige
+    if (!currentUser) return null;
 
     return (
         <div className="flex-1 flex flex-col md:flex-row bg-slate-50 min-h-screen">
             {/* SIDEBAR */}
             <aside className="w-full md:w-64 bg-white border-r border-slate-200 p-4 space-y-1">
                 <div className="flex items-center gap-3 p-3 mb-6">
-                    <div className="w-12 h-12 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-lg">
-                        {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'}
+                    <div className="w-12 h-12 rounded-xl bg-teal-500 overflow-hidden text-white flex items-center justify-center font-black text-xl shadow-lg shadow-teal-500/20">
+                        {profileData.photoURL ? (
+                            <img src={profileData.photoURL} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                            (profileData.displayName || 'U').charAt(0).toUpperCase()
+                        )}
                     </div>
                     <div className="overflow-hidden">
-                        <h3 className="font-semibold text-slate-900 truncate">
-                            {currentUser.displayName || 'Usuario'}
+                        <h3 className="font-black text-slate-900 truncate text-sm uppercase tracking-tighter">
+                            {profileData.displayName || 'Usuario'}
                         </h3>
-                        <p className="text-xs text-slate-500 truncate">{currentUser.email}</p>
+                        <p className="text-[10px] font-bold text-slate-400 truncate uppercase tracking-widest">{currentUser.email}</p>
                     </div>
                 </div>
 
-                <nav className="space-y-2">
+                <nav className="space-y-1">
                     <button
                         onClick={() => setActiveTab('marketplace')}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'marketplace' ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'marketplace' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
-                        <Package className="w-5 h-5" /> Mis Productos
+                        <Package className="w-4 h-4" /> Mis Productos
                     </button>
                     <button
                         onClick={() => setActiveTab('servicios')}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'servicios' ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'servicios' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
-                        <Wrench className="w-5 h-5" /> Mis Servicios
+                        <Wrench className="w-4 h-4" /> Mis Servicios
                     </button>
                     <button
-                        onClick={() => setActiveTab('mensajes')}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'mensajes' ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                        onClick={() => navigate('/mensajes')}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-all`}
                     >
-                        <MessageSquare className="w-5 h-5" /> Chats / Consultas
+                        <MessageSquare className="w-4 h-4" /> Centro de Mensajes
                     </button>
 
-                    <hr className="border-slate-200 my-4" />
+                    <div className="h-px bg-slate-100 my-4 mx-2" />
 
                     <button
                         onClick={() => setActiveTab('config')}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'config' ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'config' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
-                        <Settings className="w-5 h-5" /> Configuración
+                        <Settings className="w-4 h-4" /> Configuración
                     </button>
                     <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all mt-4"
                     >
-                        <LogOut className="w-5 h-5" /> Salir
+                        <LogOut className="w-4 h-4" /> Salir
                     </button>
                 </nav>
             </aside>
 
             {/* CONTENIDO PRINCIPAL */}
-            <main className="flex-1 p-6 sm:p-8 lg:p-10">
+            <main className="flex-1 p-6 sm:p-8 lg:p-12 overflow-y-auto">
                 <div className="max-w-4xl mx-auto">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 pb-4 border-b border-slate-200 gap-4">
+                    <div className="flex flex-col sm:flex-row items-baseline justify-between mb-10 pb-6 border-b border-slate-200 gap-4">
                         <div>
-                            <h1 className="text-2xl font-bold text-slate-900">
-                                {activeTab === 'marketplace' && 'Mis Anuncios de Productos'}
-                                {activeTab === 'servicios' && 'Mi Directorio de Servicios'}
-                                {activeTab === 'mensajes' && 'Centro de Mensajes (WhatsApp & Chat)'}
+                            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">
+                                {activeTab === 'marketplace' && 'Mis Anuncios'}
+                                {activeTab === 'servicios' && 'Mis Servicios'}
                                 {activeTab === 'config' && 'Configuración de Cuenta'}
                             </h1>
-                            <p className="text-slate-500 mt-1">Gestiona tu contenido y tus contactos.</p>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                {activeTab === 'config' ? 'Gestiona tu perfil público y datos de contacto.' : 'Gestiona tus publicaciones en el marketplace.'}
+                            </p>
                         </div>
 
                         {(activeTab === 'marketplace' || activeTab === 'servicios') && (
                             <button
                                 onClick={() => navigate('/crear-anuncio')}
-                                className="flex items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm shadow-teal-500/20"
+                                className="flex items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-teal-500/20 active:scale-95"
                             >
-                                <Plus className="w-4 h-4" />
-                                Crear Nuevo
+                                <Plus className="w-4 h-4" /> Publicar Nuevo
                             </button>
                         )}
                     </div>
 
-                    {/* FILTRADO DE CONTENIDO */}
-                    <div className="space-y-4">
-                        {loadingListings ? (
-                            <div className="text-center py-10 text-slate-500">Cargando tus anuncios...</div>
-                        ) : (
-                            listings.filter(item => {
-                                if (activeTab === 'marketplace') return item.type === 'product';
-                                if (activeTab === 'servicios') return item.type === 'service';
-                                return false;
-                            }).length > 0 ? (
-                                <div className="grid grid-cols-1 gap-4">
-                                    {listings
-                                        .filter(item => {
-                                            if (activeTab === 'marketplace') return item.type === 'product';
-                                            if (activeTab === 'servicios') return item.type === 'service';
-                                            return false;
-                                        })
-                                        .map(item => (
-                                            <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-4 hover:border-teal-200 transition-colors group">
-                                                <div className="w-20 h-20 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
-                                                    {item.images?.[0] ? (
-                                                        <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                                            <Package className="w-8 h-8" />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <h4 className="font-semibold text-slate-900 truncate">{item.title}</h4>
-                                                    <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
-                                                        <span className="flex items-center gap-1 font-medium text-teal-600">
-                                                            {item.currency} {item.price}
-                                                        </span>
-                                                        <span className="flex items-center gap-1">
-                                                            <MapPin className="w-3.5 h-3.5" /> {item.location?.city}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Link
-                                                        to={`/producto/${item.id}`}
-                                                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors text-center"
-                                                    >
-                                                        Ver Anuncio
-                                                    </Link>
-                                                    <button
-                                                        onClick={() => handleDelete(item.id)}
-                                                        className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
-                                                    >
-                                                        Eliminar
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))
-                                    }
-                                </div>
-                            ) : (
-                                <div className="bg-white rounded-xl border border-slate-200 p-12 text-center flex flex-col items-center justify-center">
-                                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                                        {activeTab === 'marketplace' && <Package className="w-8 h-8 text-slate-300" />}
-                                        {activeTab === 'servicios' && <Wrench className="w-8 h-8 text-slate-300" />}
-                                        {activeTab === 'mensajes' && <MessageSquare className="w-8 h-8 text-slate-300" />}
-                                        {activeTab === 'config' && <Settings className="w-8 h-8 text-slate-300" />}
+                    {activeTab === 'config' ? (
+                        <div className="bg-white rounded-[2rem] border border-slate-100 p-8 md:p-12 shadow-2xl shadow-slate-200/50">
+                            <form onSubmit={handleUpdateProfile} className="space-y-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Nombre Público</label>
+                                        <input
+                                            type="text"
+                                            value={profileData.displayName}
+                                            onChange={(e) => setProfileData({ ...profileData, displayName: e.target.value })}
+                                            className="w-full bg-slate-50 border-2 border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:bg-white focus:border-teal-500 outline-none transition-all"
+                                            placeholder="Tu nombre en el market"
+                                        />
                                     </div>
-                                    <h3 className="text-lg font-medium text-slate-900 mb-2">Aún no hay anuncios {activeTab === 'marketplace' ? 'de productos' : 'de servicios'}</h3>
-                                    <p className="text-slate-500 text-sm max-w-sm">
-                                        Cuando publiques algo nuevo, aparecerá listado aquí para que puedas gestionarlo.
-                                    </p>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Número de Teléfono</label>
+                                        <input
+                                            type="tel"
+                                            value={profileData.phone}
+                                            onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                                            className="w-full bg-slate-50 border-2 border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:bg-white focus:border-teal-500 outline-none transition-all"
+                                            placeholder="+58 412 0000000"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Ubicación (Ciudad / Estado)</label>
+                                        <input
+                                            type="text"
+                                            value={profileData.location}
+                                            onChange={(e) => setProfileData({ ...profileData, location: e.target.value })}
+                                            className="w-full bg-slate-50 border-2 border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:bg-white focus:border-teal-500 outline-none transition-all"
+                                            placeholder="Ej: Caracas, Dto Capital"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">URL de Foto de Perfil</label>
+                                        <input
+                                            type="text"
+                                            value={profileData.photoURL}
+                                            onChange={(e) => setProfileData({ ...profileData, photoURL: e.target.value })}
+                                            className="w-full bg-slate-50 border-2 border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:bg-white focus:border-teal-500 outline-none transition-all"
+                                            placeholder="https://enlace-a-tu-foto.jpg"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="pt-6">
                                     <button
-                                        onClick={() => navigate('/crear-anuncio')}
-                                        className="mt-6 flex items-center gap-2 text-teal-600 font-medium hover:underline"
+                                        type="submit"
+                                        disabled={savingProfile}
+                                        className="w-full md:w-auto bg-slate-900 hover:bg-black text-white px-12 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl shadow-slate-900/20 active:scale-95 disabled:opacity-50"
                                     >
-                                        <Plus className="w-4 h-4" /> Publicar ahora
+                                        {savingProfile ? 'Guardando...' : 'Guardar Cambios'}
                                     </button>
                                 </div>
-                            )
-                        )}
-                    </div>
+                            </form>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {loadingListings ? (
+                                <div className="text-center py-20"><Loader2 className="w-10 h-10 animate-spin mx-auto text-teal-500" /></div>
+                            ) : (
+                                listings.filter(item => {
+                                    if (activeTab === 'marketplace') return item.type === 'product';
+                                    if (activeTab === 'servicios') return item.type === 'service';
+                                    return false;
+                                }).length > 0 ? (
+                                    <div className="grid grid-cols-1 gap-6">
+                                        {listings
+                                            .filter(item => {
+                                                if (activeTab === 'marketplace') return item.type === 'product';
+                                                if (activeTab === 'servicios') return item.type === 'service';
+                                                return false;
+                                            })
+                                            .map(item => (
+                                                <div key={item.id} className="bg-white p-5 rounded-[2rem] border border-slate-100 flex items-center gap-6 hover:shadow-2xl hover:shadow-slate-200/50 transition-all group">
+                                                    <div className="w-24 h-24 bg-slate-100 rounded-2xl overflow-hidden flex-shrink-0 shadow-sm">
+                                                        {item.images?.[0] ? (
+                                                            <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                                                <Package className="w-10 h-10" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="font-black text-slate-900 truncate uppercase tracking-tighter text-lg">{item.title}</h4>
+                                                        <div className="flex items-center gap-4 mt-2">
+                                                            <span className="text-sm font-black text-teal-600 uppercase tracking-widest">
+                                                                {item.currency} {item.price}
+                                                            </span>
+                                                            <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                                <MapPin className="w-3 h-3" /> {item.location?.city || 'Varios'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col gap-2 shrink-0">
+                                                        <Link
+                                                            to={`/producto/${item.id}`}
+                                                            className="px-6 py-2 bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center"
+                                                        >
+                                                            Ver
+                                                        </Link>
+                                                        <button
+                                                            onClick={() => handleDelete(item.id)}
+                                                            className="px-6 py-2 text-red-500 hover:bg-red-50 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                                        >
+                                                            Borrar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        }
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-[3rem] border border-slate-100 p-20 text-center flex flex-col items-center justify-center shadow-sm">
+                                        <div className="w-24 h-24 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mb-8">
+                                            {activeTab === 'marketplace' && <Package className="w-12 h-12 text-slate-200" />}
+                                            {activeTab === 'servicios' && <Wrench className="w-12 h-12 text-slate-200" />}
+                                        </div>
+                                        <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-4">Aún no hay anuncios</h3>
+                                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest max-w-xs leading-loose">
+                                            Publica algo nuevo para empezar a vender en el market.
+                                        </p>
+                                        <button
+                                            onClick={() => navigate('/crear-anuncio')}
+                                            className="mt-10 flex items-center gap-2 bg-teal-500 text-white px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-teal-500/20 active:scale-95 transition-all"
+                                        >
+                                            <Plus className="w-4 h-4" /> Publicar ahora
+                                        </button>
+                                    </div>
+                                )
+                            )}
+                        </div>
+                    )}
                 </div>
             </main>
         </div>

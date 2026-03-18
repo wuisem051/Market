@@ -83,12 +83,35 @@ export const AuthProvider = ({ children }) => {
         return unsubscribe;
     }, []);
 
+    const updateUserProfile = async (data) => {
+        if (!currentUser) return;
+
+        // Update Firebase Auth Profile
+        if (data.displayName || data.photoURL) {
+            await updateProfile(auth.currentUser, {
+                displayName: data.displayName,
+                photoURL: data.photoURL
+            });
+        }
+
+        // Update Firestore User Doc
+        const userRef = doc(db, 'users', currentUser.uid);
+        await setDoc(userRef, {
+            ...data,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        // Force Auth update in context
+        setCurrentUser({ ...auth.currentUser });
+    };
+
     const value = {
         currentUser,
         signup,
         login,
         loginWithGoogle,
-        logout
+        logout,
+        updateUserProfile
     };
 
     return (

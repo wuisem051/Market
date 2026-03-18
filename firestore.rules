@@ -14,18 +14,32 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // Colección de Listados (Marketplace): REGLAS ABIERTAS PARA TESTEO LOCAL
+    // Colección de Listados (Marketplace)
     match /listings/{listingId} {
       allow read: if true;
-      // Permitimos crear a todos temporalmente para verificar la conexión
-      allow create: if true;
-      // Editar/borrar requiere que el sellerId coincida (seguridad mínima activa)
-      allow update, delete: if isSignedIn() && resource.data.sellerId == request.auth.uid;
+      allow create: if true; // Temporarmente abierto
+      allow update, delete: if isSignedIn(); 
     }
     
-    // Resto de colecciones por defecto bloqueadas
+    // Colección de Mensajes y Conversaciones (CHAT)
+    match /conversations/{convId} {
+      allow read, write: if isSignedIn();
+      
+      // Mensajes dentro de una conversación
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    // Configuración para anuncios y chats de moderación
+    match /ads/{adId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // Resto de documentos por defecto (Seguridad Básica)
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isSignedIn();
     }
   }
 }
