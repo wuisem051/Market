@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     collection, query, where, onSnapshot, orderBy,
-    addDoc, serverTimestamp, doc, getDoc, setDoc, updateDoc, writeBatch, increment
+    addDoc, serverTimestamp, doc, getDoc, setDoc, updateDoc, writeBatch, increment, deleteDoc, getDocs
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import {
     Send, User, Search, ArrowLeft, MoreVertical,
-    MessageSquare, Clock, Package, Check, CheckCheck, Loader2
+    MessageSquare, Clock, Package, Check, CheckCheck, Loader2, Trash2, ShieldAlert, X
 } from 'lucide-react';
 
 const Messages = () => {
@@ -22,6 +22,8 @@ const Messages = () => {
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [initializing, setInitializing] = useState(false);
+    const [showOptions, setShowOptions] = useState(false);
+    const [reporting, setReporting] = useState(false);
 
     const messagesEndRef = useRef(null);
 
@@ -128,7 +130,6 @@ const Messages = () => {
                     });
                 });
 
-                // Reset unread count for me in the conversation doc
                 batch.update(doc(db, 'conversations', activeConversation.id), {
                     [`unreadCount.${currentUser.uid}`]: 0
                 });
@@ -139,6 +140,57 @@ const Messages = () => {
 
         return () => unsubscribe();
     }, [activeConversation, currentUser]);
+
+    const handleDeleteChat = async () => {
+        if (!activeConversation) return;
+        if (!window.confirm("¿Seguro que quieres eliminar este chat? Se borrarán todos los mensajes.")) return;
+
+        try {
+            // Delete all messages first (batch)
+            const msgsSnap = await getDocs(collection(db, 'conversations', activeConversation.id, 'messages'));
+            const batch = writeBatch(db);
+            msgsSnap.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+
+            // Delete conversation
+            await deleteDoc(doc(db, 'conversations', activeConversation.id));
+
+            setActiveConversation(null);
+            setShowOptions(false);
+        } catch (error) {
+            console.error("Error deleting chat:", error);
+            alert("Error al eliminar chat");
+        }
+    };
+
+    const handleReport = async () => {
+        if (!activeConversation) return;
+        const otherId = activeConversation.participants.find(id => id !== currentUser.uid);
+        const reason = window.prompt("¿Por qué quieres denunciar a este usuario? (Inapropiado, Estafa, Spam, etc.)");
+
+        if (!reason) return;
+
+        setReporting(true);
+        try {
+            await addDoc(collection(db, 'reports'), {
+                reportedUserId: otherId,
+                reportedByName: currentUser.displayName || 'Anon',
+                reportedById: currentUser.uid,
+                conversationId: activeConversation.id,
+                reason,
+                status: 'pending',
+                createdAt: serverTimestamp()
+            });
+
+            alert("Hemos recibido tu reporte. El equipo de administración revisará el caso.");
+            setShowOptions(false);
+        } catch (error) {
+            console.error("Error reporting:", error);
+            alert("Error al enviar reporte");
+        } finally {
+            setReporting(false);
+        }
+    };
 
     const handleNewConversation = async () => {
         try {
@@ -227,7 +279,7 @@ const Messages = () => {
     if (!currentUser) return null;
 
     return (
-        <div className="flex-1 flex overflow-hidden bg-white max-w-7xl mx-auto w-full border-x border-slate-100 shadow-2xl">
+        <div className="flex-1 flex overflow-hidden bg-white max-w-7xl mx-auto w-full border-x border-slate-100 shadow-2xl relative">
             {/* Sidebar: Conversations List */}
             <div className={`${activeConversation ? 'hidden md:flex' : 'flex'} w-full md:w-[350px] border-r border-slate-100 flex-col bg-slate-50/30`}>
                 <div className="p-6 border-b border-slate-100 bg-white">
@@ -252,7 +304,7 @@ const Messages = () => {
                             return (
                                 <button
                                     key={conv.id}
-                                    onClick={() => setActiveConversation(conv)}
+                                    onClick={() => { setActiveConversation(conv); setShowOptions(false); }}
                                     className={`w-full p-4 flex gap-4 transition-all border-b border-slate-50/50 ${activeConversation?.id === conv.id ? 'bg-white shadow-lg z-10 scale-[1.02] ring-1 ring-slate-100' : 'hover:bg-slate-50'}`}
                                 >
                                     <div className="relative shrink-0">
@@ -319,9 +371,32 @@ const Messages = () => {
                                 </p>
                             </div>
 
-                            <button className="p-2 hover:bg-slate-100 rounded-xl text-slate-400">
-                                <MoreVertical className="w-5 h-5" />
-                            </button>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowOptions(!showOptions)}
+                                    className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors"
+                                >
+                                    <MoreVertical className="w-5 h-5" />
+                                </button>
+
+                                {showOptions && (
+                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 py-2 animate-in fade-in zoom-in-95 duration-200">
+                                        <button
+                                            onClick={handleDeleteChat}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-colors"
+                                        >
+                                            <Trash2 className="w-4 h-4 text-red-500" /> Eliminar Chat
+                                        </button>
+                                        <button
+                                            onClick={handleReport}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-colors"
+                                        >
+                                            <ShieldAlert className="w-4 h-4 text-orange-500" /> Reportar Usuario
+                                        </button>
+                                        {reporting && <div className="px-4 py-2 text-[10px] font-bold text-teal-500 animate-pulse">Enviando reporte...</div>}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Messages List */}
