@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
     Users, Package, Briefcase, TrendingUp,
     AlertCircle, CheckCircle, Clock, Search,
-    Filter, MoreVertical, LayoutDashboard
+    MoreVertical, LayoutDashboard, Megaphone, ChevronRight
 } from 'lucide-react';
-import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
+import { Link } from 'react-router-dom';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 
 const AdminDashboard = () => {
@@ -18,20 +19,22 @@ const AdminDashboard = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // En una implementación real, esto vendría de una consulta de agregación o metadatos
         const fetchStats = async () => {
             try {
                 const listingsSnap = await getDocs(collection(db, 'listings'));
                 const listings = listingsSnap.docs.map(doc => doc.data());
 
+                // Count active ads
+                const adsSnap = await getDocs(collection(db, 'ads'));
+                const activeAds = adsSnap.docs.filter(d => d.data().active !== false).length;
+
                 setStats({
-                    users: 42, // Mock o contar de Auth (requiere admin SDK)
+                    users: 42,
                     products: listings.filter(l => l.type === 'product').length,
                     services: listings.filter(l => l.type === 'service').length,
-                    activeAds: 3
+                    activeAds,
                 });
 
-                // Mock de acciones recientes
                 setRecentActions([
                     { id: 1, type: 'new_user', user: 'Maria G.', time: 'hace 5 min', status: 'success' },
                     { id: 2, type: 'new_listing', user: 'Juan P.', time: 'hace 12 min', status: 'pending' },
@@ -79,7 +82,7 @@ const AdminDashboard = () => {
                     <StatCard title="Usuarios Totales" value={stats.users} icon={Users} color="bg-blue-500" />
                     <StatCard title="Productos Activos" value={stats.products} icon={Package} color="bg-teal-500" />
                     <StatCard title="Servicios Profesionales" value={stats.services} icon={Briefcase} color="bg-purple-500" />
-                    <StatCard title="Ads Activos" value={stats.activeAds} icon={TrendingUp} color="bg-amber-500" />
+                    <StatCard title="Banners Activos" value={stats.activeAds} icon={Megaphone} color="bg-amber-500" />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -97,7 +100,7 @@ const AdminDashboard = () => {
                                     </div>
                                     <div className="flex-1">
                                         <p className="text-sm font-medium text-slate-900">
-                                            {action.type === 'new_user' ? `Nuevo usuario registrado: ${action.user}` : action.type === 'new_listing' ? `Nuevo anuncio publicado por ${action.user}` : `Reporte de contenido por ${action.user}`}
+                                            {action.type === 'new_user' ? `Nuevo usuario: ${action.user}` : action.type === 'new_listing' ? `Nuevo anuncio por ${action.user}` : `Reporte por ${action.user}`}
                                         </p>
                                         <p className="text-xs text-slate-400 mt-0.5">{action.time}</p>
                                     </div>
@@ -110,7 +113,8 @@ const AdminDashboard = () => {
                     </div>
 
                     {/* Quick Tools */}
-                    <div className="space-y-6">
+                    <div className="space-y-4">
+                        {/* Search tool */}
                         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                             <h2 className="font-bold text-slate-900 mb-4 flex items-center gap-2 text-sm">
                                 <Search className="w-4 h-4 text-teal-600" /> Soporte Rápido
@@ -127,14 +131,30 @@ const AdminDashboard = () => {
                             </div>
                         </div>
 
-                        <div className="bg-teal-600 p-6 rounded-2xl shadow-sm text-white">
-                            <h2 className="font-bold mb-2">Monitor del Sistema</h2>
-                            <p className="text-teal-100 text-xs mb-4">Base de datos Firestore y Storage operando con normalidad.</p>
-                            <div className="w-full bg-teal-700/50 rounded-full h-1.5 overflow-hidden">
-                                <div className="bg-white w-[98%] h-full rounded-full"></div>
+                        {/* System monitor */}
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                            <h2 className="font-bold mb-2 text-slate-900 text-sm">Monitor del Sistema</h2>
+                            <p className="text-slate-500 text-xs mb-4">Firestore y Storage operando con normalidad.</p>
+                            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-teal-500 w-[98%] h-full rounded-full"></div>
                             </div>
-                            <p className="text-[10px] text-teal-200 mt-2 text-right">Uptime: 99.9%</p>
+                            <p className="text-[10px] text-slate-400 mt-2 text-right">Uptime: 99.9%</p>
                         </div>
+
+                        {/* Banners quick access */}
+                        <Link
+                            to="/admin/ads"
+                            className="flex items-center justify-between bg-gradient-to-r from-teal-600 to-teal-500 p-5 rounded-2xl shadow-sm text-white group hover:from-teal-700 hover:to-teal-600 transition-all"
+                        >
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Megaphone className="w-5 h-5" />
+                                    <span className="font-bold text-sm">Gestionar Banners</span>
+                                </div>
+                                <p className="text-teal-100 text-xs">Crea y edita banners en todo el sitio.</p>
+                            </div>
+                            <ChevronRight className="w-5 h-5 text-teal-200 group-hover:translate-x-1 transition-transform" />
+                        </Link>
                     </div>
                 </div>
             </div>

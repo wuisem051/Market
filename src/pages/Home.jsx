@@ -6,7 +6,7 @@ import {
 import { Link } from 'react-router-dom';
 import AdBanner from '../components/AdBanner';
 import { db } from '../firebase/config';
-import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, limit, getDocs } from 'firebase/firestore';
 
 const Home = () => {
     const [recentProducts, setRecentProducts] = useState([]);
@@ -17,22 +17,16 @@ const Home = () => {
         const fetchHomeData = async () => {
             setLoading(true);
             try {
-                // Fetch recent listings without orderBy to be 100% sure it returns data
-                const q = query(
-                    collection(db, 'listings'),
-                    limit(40)
-                );
+                const q = query(collection(db, 'listings'), limit(40));
                 const snapshot = await getDocs(q);
                 const allFetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                // Sort by date in memory (descending)
                 const allRecent = allFetched.sort((a, b) => {
                     const dateA = a.createdAt?.toDate?.() || new Date(0);
                     const dateB = b.createdAt?.toDate?.() || new Date(0);
                     return dateB - dateA;
                 });
 
-                // Filter in memory
                 setRecentProducts(allRecent.filter(item => item.type === 'product').slice(0, 5));
                 setRecentServices(allRecent.filter(item => item.type === 'service').slice(0, 6));
             } catch (error) {
@@ -44,14 +38,13 @@ const Home = () => {
 
         fetchHomeData();
     }, []);
+
     return (
         <div className="flex flex-col min-h-screen">
-            {/* HERO BANNER - ADS #1 */}
+
+            {/* BANNER #1 - TOP (debajo del navbar) */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 w-full">
-                <AdBanner
-                    zone="home-top"
-                    type="horizontal"
-                />
+                <AdBanner zone="home-top" type="horizontal" />
             </div>
 
             {/* HERO SECTION */}
@@ -115,8 +108,13 @@ const Home = () => {
                 </div>
             </section>
 
+            {/* BANNER #2 - MIDDLE (entre categorías y productos) */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10 w-full">
+                <AdBanner zone="home-middle" type="horizontal" />
+            </div>
+
             {/* PRODUCTOS RECIENTES */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 w-full">
                 <div className="flex justify-between items-end mb-8">
                     <div>
                         <h2 className="text-2xl font-bold text-slate-900">Productos Recientes</h2>
@@ -151,7 +149,7 @@ const Home = () => {
                                 </div>
                                 <div className="p-4 flex-1 flex flex-col">
                                     <h3 className="font-medium text-slate-900 line-clamp-2 text-sm">{item.title}</h3>
-                                    <p className="text-lg font-bold text-teal-600 mt-2 mt-auto">{item.currency} {item.price}</p>
+                                    <p className="text-lg font-bold text-teal-600 mt-auto">{item.currency} {item.price}</p>
                                     <div className="flex gap-1 items-center mt-2 text-slate-500 text-xs">
                                         <MapPin className="w-3 h-3" /> {item.location?.city || 'Venezuela'}
                                     </div>
@@ -167,11 +165,16 @@ const Home = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex flex-col lg:flex-row gap-8">
                         <div className="flex-1">
-                            <div className="flex justify-between items-end mb-8">
+                            <div className="flex justify-between items-end mb-6">
                                 <div>
                                     <h2 className="text-2xl font-bold text-slate-900">Servicios Destacados</h2>
                                     <p className="text-slate-500 mt-1">Profesionales online y presenciales</p>
                                 </div>
+                            </div>
+
+                            {/* BANNER #3 - SERVICES TOP (encima de la lista de servicios) */}
+                            <div className="mb-6">
+                                <AdBanner zone="home-services-top" type="horizontal" />
                             </div>
 
                             <div className="grid grid-cols-1 gap-4">
@@ -216,15 +219,19 @@ const Home = () => {
                         </div>
 
                         <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-4">
-                            {/* SIDEBAR ADS */}
-                            <AdBanner
-                                zone="sidebar"
-                                type="vertical"
-                            />
+                            {/* BANNER #4 - SIDEBAR */}
+                            <AdBanner zone="sidebar" type="vertical" />
+                            {/* BANNER #5 - SIDEBAR SECONDARY */}
+                            <AdBanner zone="sidebar-2" type="vertical" />
                         </div>
                     </div>
                 </div>
             </section>
+
+            {/* BANNER #6 - PRE-FOOTER */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
+                <AdBanner zone="home-footer" type="horizontal" />
+            </div>
 
             {/* FOOTER */}
             <footer className="bg-white border-t border-slate-200 py-12">
