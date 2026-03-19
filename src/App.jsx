@@ -12,8 +12,6 @@ import { AuthProvider } from './context/AuthContext';
 import Marketplace from './pages/Marketplace';
 import ProductDetail from './pages/ProductDetail';
 import Services from './pages/Services';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminAds from './pages/admin/AdminAds';
 
 function App() {
   return (
@@ -33,9 +31,6 @@ function App() {
               <Route path="/mensajes/:productId/:sellerId" element={<Messages />} />
               <Route path="/crear-anuncio" element={<CreateListing />} />
               <Route path="/editar-anuncio/:id" element={<EditListing />} />
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              <Route path="/admin/ads" element={<AdminAds />} />
-              {/* Opcional: Ruta para cuando la página no existe */}
               <Route path="*" element={<div className="p-8 text-center text-slate-500">Página no encontrada</div>} />
             </Routes>
           </main>
